@@ -1,11 +1,12 @@
-using System.Drawing;
+using Digbot.DigbotClasses;
 using dotenv.net;
 using PixelPilot.Client;
 using PixelPilot.Client.Messages.Packets.Extensions;
-using PixelPilot.Client.Players;
 using PixelPilot.Client.Players.Basic;
 using PixelPilot.Client.World;
-using PixelPilot.Structures;
+using PixelPilot.Client.World.Blocks;
+using PixelPilot.Client.World.Blocks.Placed;
+using PixelPilot.Client.World.Constants;
 using PixelPilot.Structures.Converters.PilotSimple;
 using PixelPilot.Structures.Extensions;
 using PixelWalker.Networking.Protobuf.WorldPackets;
@@ -15,137 +16,339 @@ DotEnv.Load(options: new DotEnvOptions(envFilePaths: ["../.env"]));
 string email = Environment.GetEnvironmentVariable("DIGBOT_EMAIL")!;
 string password = Environment.GetEnvironmentVariable("DIGBOT_PASS")!;
 
-Structure? currentStructure = null;
-var point1 = new Point(0, 0);
-var point2 = new Point(0, 0);
+int width = 636;
+int height = 400;
+int beginHeight = 40;
 
-var client = PixelPilotClient.Builder()
-	.SetEmail(email)
-	.SetPassword(password)
-	.SetAutomaticReconnect(false)
-	.Build();
+var players = new Dictionary<string, DigbotPlayer> { };
 
-var world = new PixelWorld(400, 636);
-client.OnPacketReceived += world.HandlePacket;
-
-var playerManager = new PlayerManager();
-client.OnPacketReceived += playerManager.HandlePacket;
-
-playerManager.OnPlayerJoined += (_, player) =>
+void HandlePlayerChatPacket(
+    PlayerChatPacket chatPacket,
+    Player player,
+    PixelPilotClient client,
+    DigbotWorld world,
+    Random random
+)
 {
-	Console.WriteLine($"Player {player.Id} joined.");
-	Console.WriteLine($"Player {player.Username} joined.");
-	client.Send(new PlayerChatPacket()
-	{
-		Message = $"/givegod {player.Username}"
-	});
-	if (player.Username == Environment.GetEnvironmentVariable("OWNER_USER")!)
-	{
-		client.Send(new PlayerChatPacket()
-		{
-			Message = $"/giveedit {player.Username}"
-		});
-	};
-};
+    if (!chatPacket.Message.StartsWith('.'))
+        return;
+    var fullText = chatPacket.Message[1..]; // Skip leading '.'
+    var args = fullText.Split(' ');
 
-client.OnPacketReceived += (_, packet) =>
+    if (args.Length == 0)
+        return;
+
+    switch (args[0])
+    {
+        case "range":
+            if (args.Length < 2)
+                return;
+
+            if (double.TryParse(args[1], out var range) && range >= 1.0 && range <= 3.0)
+            {
+                players[player.Username].Range = range;
+                Console.WriteLine($"Set range for {player.Username} to {range}");
+            }
+            break;
+        case "reset":
+            if (player.Username == Environment.GetEnvironmentVariable("OWNER_USER")!)
+            {
+                world.Reset(client);
+                Console.WriteLine("World reset.");
+            }
+            break;
+
+        case "ban":
+            if (args.Length < 2)
+                return;
+            if (player.Username == Environment.GetEnvironmentVariable("OWNER_USER")!)
+            {
+                client.Send(new PlayerChatPacket() { Message = $"/kick {args[1]} Your banned" });
+                client.Send(new PlayerChatPacket() { Message = $"/unkick {args[1]}" });
+                players[args[1]].Banned = true;
+            }
+            break;
+        case "unban":
+            if (args.Length < 2)
+                return;
+            if (player.Username == Environment.GetEnvironmentVariable("OWNER_USER")!)
+            {
+                players[args[1]].Banned = false;
+            }
+            break;
+        default:
+            Console.WriteLine($"Unknown command: {args[0]}");
+            break;
+    }
+}
+
+void HandlePlayerMovedPacket(
+    PlayerMovedPacket movedPacket,
+    Player player,
+    PixelPilotClient client,
+    DigbotWorld world,
+    Random random
+)
 {
-	var playerId = packet.GetPlayerId();
-	if (playerId == null) return;
-	IPixelPlayer? player = playerManager.GetPlayer(playerId.Value);
-	if (player == null) return;
-	switch (packet)
-	{
-		case PlayerChatPacket chat:
-			{
-				if (!chat.Message.StartsWith('.') || player.Username != Environment.GetEnvironmentVariable("OWNER_USER")!) return;
+    int x = (int)((movedPacket.Position.X / 16.0) + 0.5);
+    int y = (int)((movedPacket.Position.Y / 16.0) + 0.5);
+    if (y < beginHeight - 1 || !world.Breaking)
+        return;
+    if (movedPacket.SpaceJustDown && Math.Abs(movedPacket.Horizontal + movedPacket.Vertical) == 1)
+    {
+        if (movedPacket.Horizontal != 0)
+        {
+            x += movedPacket.Horizontal;
+        }
+        else
+        {
+            y += movedPacket.Vertical;
+        }
 
-				var fullText = chat.Message[1..];
-				var args = fullText.Split(' ');
+        if (!world.Inside(x, y - beginHeight))
+            return;
+        if (world.GetBlock(x, y - beginHeight).type == PixelBlock.Empty)
+            return;
+        if (world.GetBlock(x, y - beginHeight).type == PixelBlock.GenericBlackTransparent)
+            return;
 
-				switch (args[0])
-				{
-					case "p1":
-						point1 = new Point(player.BlockX, player.BlockY);
-						client.SendChat($"Point 1 has been set. {point1}");
-						break;
-					case "p2":
-						point2 = new Point(player.BlockX, player.BlockY);
-						client.SendChat($"Point 2 has been set. {point2}");
-						break;
-					case "select":
-					case "copy":
-						currentStructure = world.GetStructure(point1, point2, false);
-						client.SendChat("Current structure has been set.");
-						break;
-					case "save":
-						if (currentStructure == null)
-						{
-							client.SendChat("Please copy a structure using .copy");
-							return;
-						}
+        DigbotPlayer playerObj = players[player.Username];
 
-						if (args.Length < 2 || currentStructure == null)
-						{
-							client.SendChat("Please provide a file name.");
-							return;
-						}
+        List<IPlacedBlock> blockList = [];
+		PixelBlock currentBlock = world.GetBlock(x, y - beginHeight).type;
+        world.MineBlock(playerObj, x, y - beginHeight);
+        if (world.GetBlock(x, y - beginHeight).type != world.GetBlock(x, y - beginHeight).type)
+        {
+            blockList.Add(new PlacedBlock(x, y, WorldLayer.Foreground, new BasicBlock(world.GetBlock(x, y - beginHeight).type)));
+        }
 
-						var rawSave = PilotSaveSerializer.Serialize(currentStructure);
-						File.WriteAllText($"./{args[1]}.json", rawSave);
+        (int, int)[] offsets = ranges()[playerObj.Range];
+        // reveal blocks here
 
-						client.SendChat("Structure saved to file.");
-						break;
-					case "load":
-						if (args.Length < 2)
-						{
-							client.SendChat("Please provide a file name.");
-							return;
-						}
+        foreach (var (dx, dy) in offsets)
+        {
+            int newX = x + dx;
+            int newY = y + dy;
+            if (!world.Inside(newX, newY - beginHeight))
+                continue;
+            if (world.GetBlock(newX, newY - beginHeight).type != PixelBlock.GenericBlackTransparent)
+                continue;
+            var list = world.Blocks.Where(block => block.condition(playerObj, (x, y)));
+            int randomWeight = random.Next(list.Sum(block => block.weight));
+            var block = list.First(block => (randomWeight -= block.weight) < 0).block;
+            world.RevealBlock(newX, newY - beginHeight, block);
+            blockList.Add(
+                new PlacedBlock(newX, newY, WorldLayer.Foreground, new BasicBlock(block))
+            );
+        }
 
-						var rawLoad = File.ReadAllText($"./{args[1]}.json");
-						currentStructure = PilotSaveSerializer.Deserialize(rawLoad);
+        Task.Run(async () =>
+        {
+            await Task.Delay(100);
+            client.SendRange(blockList.ToChunkedPackets());
+        });
+    }
+}
 
-						client.SendChat("Structure loaded from file.");
-						break;
-					case "paste":
-						{
-							if (currentStructure == null) return;
-
-							var pasteX = player.BlockX;
-							var pasteY = player.BlockY;
-
-							var packets = world.GetDifference(currentStructure, pasteX, pasteY).ToChunkedPackets();
-
-							client.SendChat($"Pasting structure... {packets.Count}");
-							client.SendRange(packets);
-
-							break;
-						}
-					case "exit":
-						{
-							client.Disconnect();
-							break;
-						}
-				}
-				return;
-			}
-	}
-};
-
-client.OnClientConnected += (_) =>
+(PixelPilotClient, JoinData) SetupWorld(DigbotWorld worldTemplate)
 {
-	var spaceshipFile = File.ReadAllText("./spaceship.json");
-	var spaceshipStructure = PilotSaveSerializer.Deserialize(spaceshipFile);
-	var spaceshipPackets = world.GetDifference(spaceshipStructure, 299, 5).ToChunkedPackets();
-	client.SendRange(spaceshipPackets);
-};
+    var client = PixelPilotClient
+        .Builder()
+        .SetEmail(email)
+        .SetPassword(password)
+        .SetAutomaticReconnect(false)
+        .Build();
 
-await client.Connect($"digbot_test", new JoinData()
-{
-	WorldHeight = 400,
-	WorldWidth = 636,
-	WorldTitle = "---"
-});
+    var random = new Random();
+
+    var world = new PixelWorld(height, width);
+    client.OnPacketReceived += world.HandlePacket;
+
+    var playerManager = new PlayerManager();
+    client.OnPacketReceived += playerManager.HandlePacket;
+
+    playerManager.OnPlayerJoined += (_, player) =>
+    {
+        if (players.ContainsKey(player.Username)) { }
+        else
+        {
+            players.Add(player.Username, new DigbotPlayer() { Range = 1.0, Banned = false });
+        }
+        if (players[player.Username].Banned)
+        {
+            client.Send(new PlayerChatPacket() { Message = $"/kick {player.Username} Your still banned" });
+            client.Send(new PlayerChatPacket() { Message = $"/unkick {player.Username}" });
+        }
+    };
+
+    client.OnClientConnected += (_) =>
+    {
+        var spaceshipFile = File.ReadAllText("./spaceship.json");
+        var spaceshipStructure = PilotSaveSerializer.Deserialize(spaceshipFile);
+        var spaceshipPackets = world
+            .GetDifference(spaceshipStructure, width / 2 - 19, 5)
+            .ToChunkedPackets();
+        client.SendRange(spaceshipPackets);
+        client.Send(new PlayerFacePacket() { FaceId = 17 });
+        client.Send(
+            new PlayerMovedPacket()
+            {
+                Position = new PointDouble() { X = width / 2 + 0.5, Y = 320 },
+                TickId = 100,
+            }
+        );
+        var blockList = new List<IPlacedBlock>();
+        for (int x = 0; x < width; x++)
+        {
+            blockList.Add(new PlacedBlock(x, 0, WorldLayer.Foreground, new BasicBlock(PixelBlock.Empty)));
+            if (x > 0 && x < beginHeight)
+            {
+                blockList.Add(new PlacedBlock(0, x, WorldLayer.Foreground, new BasicBlock(PixelBlock.Empty)));
+                blockList.Add(new PlacedBlock(635, x, WorldLayer.Foreground, new BasicBlock(PixelBlock.Empty)));
+            }
+        }
+        client.SendRange(blockList.ToChunkedPackets());
+        worldTemplate.Reset(client);
+    };
+
+    client.OnPacketReceived += (_, packet) =>
+    {
+        var playerId = packet.GetPlayerId();
+        if (playerId == null)
+            return;
+
+        var player = playerManager.GetPlayer(playerId.Value);
+        if (player == null)
+            return;
+
+        switch (packet)
+        {
+            case PlayerChatPacket chatPacket:
+                HandlePlayerChatPacket(chatPacket, player, client, worldTemplate, random);
+                break;
+            case PlayerMovedPacket movedPacket:
+                HandlePlayerMovedPacket(movedPacket, player, client, worldTemplate, random);
+                break;
+        }
+    };
+
+    return (
+        client,
+        new JoinData()
+        {
+            WorldHeight = height,
+            WorldWidth = width,
+            WorldTitle = $"[Digbot] {worldTemplate.Name}",
+        }
+    );
+}
+
+DigbotWorld voidWorld = new(
+    "Void",
+    PixelBlock.BasicBlack,
+    (type, position) => 0.0f,
+    (player, type, position, health) => (PixelBlock.Empty, 0.0f),
+    [
+        (PixelBlock.BasicBlack, 1000, (player, position) => true),
+        (PixelBlock.BasicRed, 5, (player, position) => true),
+        (PixelBlock.BasicBlue, 5, (player, position) => true),
+        (PixelBlock.BasicGreen, 5, (player, position) => true),
+        (PixelBlock.BasicYellow, 5, (player, position) => true),
+        (PixelBlock.BasicCyan, 5, (player, position) => true),
+    ]
+);
+
+var (client, data) = SetupWorld(voidWorld);
+
+await client.Connect($"digbot_void", data);
 
 await client.WaitForDisconnect();
+
+Dictionary<double, (int dx, int dy)[]> ranges()
+{
+    return new Dictionary<double, (int dx, int dy)[]>
+    {
+        {
+            1.0,
+            new (int, int)[]
+            {
+                (0, 1),
+                (0, -1),
+                (1, 0),
+                (-1, 0),
+                (1, 1),
+                (-1, -1),
+                (1, -1),
+                (-1, 1),
+            }
+        },
+        {
+            2.0,
+            new (int, int)[]
+            {
+                (0, 1),
+                (0, -1),
+                (1, 0),
+                (-1, 0),
+                (1, 1),
+                (-1, -1),
+                (1, -1),
+                (-1, 1),
+                (2, 0),
+                (-2, 0),
+                (0, 2),
+                (0, -2),
+                (1, 2),
+                (-1, 2),
+                (2, 1),
+                (-2, 1),
+                (2, -1),
+                (-2, -1),
+                (1, -2),
+                (-1, -2),
+            }
+        },
+        {
+            3.0,
+            new (int, int)[]
+            {
+                (0, 1),
+                (0, -1),
+                (1, 0),
+                (-1, 0),
+                (1, 1),
+                (-1, -1),
+                (1, -1),
+                (-1, 1),
+                (2, 0),
+                (-2, 0),
+                (0, 2),
+                (0, -2),
+                (1, 2),
+                (-1, 2),
+                (2, 1),
+                (-2, 1),
+                (2, -1),
+                (-2, -1),
+                (2, 2),
+                (-2, 2),
+                (2, -2),
+                (-2, -2),
+                (1, -2),
+                (-1, -2),
+                (3, 0),
+                (-3, 0),
+                (0, 3),
+                (0, -3),
+                (1, 3),
+                (-1, 3),
+                (3, 1),
+                (-3, 1),
+                (3, -1),
+                (-3, -1),
+                (1, -3),
+                (-1, -3),
+            }
+        },
+    };
+}
