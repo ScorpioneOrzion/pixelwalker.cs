@@ -10,8 +10,9 @@ namespace Digbot.DigbotClasses
     public class DigbotWorld
     {
         public string Name { get; }
-        public int Width { get; } = 636;
-        public int Height { get; } = 360;
+        public int Width { get; } = 400;
+        public int AirHeight { get; } = 40;
+        public int Height { get; } = 400;
         private readonly Func<PixelBlock, (int x, int y), float> _maxHealthCalculator;
         private readonly Func<
             DigbotPlayer,
@@ -22,7 +23,7 @@ namespace Digbot.DigbotClasses
         > _mineHealthCalculator;
         public (PixelBlock type, float health)[,] BlockState { get; private set; }
         public PixelBlock Ground { get; }
-        public bool Breaking { get; set; }
+        public bool Breaking;
         public List<(
             PixelBlock block,
             int weight,
@@ -53,12 +54,12 @@ namespace Digbot.DigbotClasses
             _maxHealthCalculator = setHealthCalculator;
             _mineHealthCalculator = mineHealthCalculator;
             Breaking = false;
-            BlockState = new (PixelBlock, float)[Width, Height];
+            BlockState = new (PixelBlock, float)[Width, Height - AirHeight];
         }
 
         public bool Inside(int x, int y)
         {
-            return x >= 0 && x < Width && y >= 0 && y < Height;
+            return x >= 0 && x < Width && y >= 0 && y < Height - AirHeight;
         }
 
         public void Reset(PixelPilotClient client)
@@ -74,7 +75,8 @@ namespace Digbot.DigbotClasses
                 );
                 RevealBlock(x, 0, Ground);
             }
-            for (int y = 1; y < Height; y++)
+            client.SendRange(blockList.ToChunkedPackets());
+            for (int y = 1; y < Height - AirHeight; y++)
             {
                 for (int x = 0; x < Width; x++)
                 {
@@ -82,16 +84,16 @@ namespace Digbot.DigbotClasses
                     blockList.Add(
                         new PlacedBlock(
                             x,
-                            y + 40,
+                            y + AirHeight,
                             WorldLayer.Foreground,
                             new BasicBlock(PixelBlock.GenericBlackTransparent)
                         )
                     );
                 }
             }
-
             client.SendRange(blockList.ToChunkedPackets());
             Breaking = true;
+            client.SendRange(blockList.ToChunkedPackets());
         }
 
         public void RevealBlock(int x, int y, PixelBlock setType)
