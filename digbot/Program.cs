@@ -1,4 +1,5 @@
-using Digbot.DigbotClasses;
+using digbot;
+using digbot.Classes;
 using dotenv.net;
 using PixelPilot.Client;
 using PixelPilot.Client.Messages.Packets.Extensions;
@@ -17,142 +18,6 @@ string password = Environment.GetEnvironmentVariable("DIGBOT_PASS")!;
 string[] immune = Environment.GetEnvironmentVariable("IMMUNE")!.Split("|");
 
 var players = new Dictionary<string, DigbotPlayer> { };
-
-void HandlePlayerChatPacket(
-    PlayerChatPacket chatPacket,
-    Player player,
-    PixelPilotClient client,
-    DigbotWorld world,
-    Random random
-)
-{
-    if (!chatPacket.Message.StartsWith('.'))
-        return;
-    var fullText = chatPacket.Message[1..]; // Skip leading '.'
-    var args = fullText.Split(' ');
-
-    if (args.Length == 0)
-        return;
-
-    switch (args[0])
-    {
-        case "reset":
-            if (player.Username == Environment.GetEnvironmentVariable("OWNER_USER")!)
-            {
-                world.Reset(client);
-                Console.WriteLine("World reset.");
-            }
-            break;
-
-        case "ban":
-            if (args.Length < 2)
-                return;
-            if (immune.Contains(args[1]) && !immune.Contains(player.Username))
-            {
-                client.Send(
-                    new PlayerChatPacket()
-                    {
-                        Message =
-                            $"/kick {args[1]} That person is immune, here have a timeout instead.",
-                    }
-                );
-                break;
-            }
-            if (
-                player.Username == Environment.GetEnvironmentVariable("OWNER_USER")!
-                && !immune.Contains(args[1])
-            )
-            {
-                client.Send(new PlayerChatPacket() { Message = $"/kick {args[1]} You're banned" });
-                client.Send(new PlayerChatPacket() { Message = $"/unkick {args[1]}" });
-                players[args[1]].Banned = true;
-            }
-            break;
-        case "unban":
-            if (args.Length < 2)
-                return;
-            if (player.Username == Environment.GetEnvironmentVariable("OWNER_USER")!)
-            {
-                players[args[1]].Banned = false;
-            }
-            break;
-        default:
-            Console.WriteLine($"Unknown command: {args[0]}");
-            break;
-    }
-}
-
-void HandlePlayerMovedPacket(
-    PlayerMovedPacket movedPacket,
-    Player player,
-    PixelPilotClient client,
-    DigbotWorld world,
-    Random random
-)
-{
-    int x = (int)((movedPacket.Position.X / 16.0) + 0.5);
-    int y = (int)((movedPacket.Position.Y / 16.0) + 0.5);
-    if (y < world.AirHeight - 1 || !world.Breaking)
-        return;
-    if (movedPacket.SpaceJustDown && Math.Abs(movedPacket.Horizontal + movedPacket.Vertical) == 1)
-    {
-        if (movedPacket.Horizontal != 0)
-        {
-            x += movedPacket.Horizontal;
-        }
-        else
-        {
-            y += movedPacket.Vertical;
-        }
-
-        if (!world.Inside(x, y - world.AirHeight))
-            return;
-        if (world.GetBlock(x, y - world.AirHeight).type == PixelBlock.Empty)
-            return;
-        if (world.GetBlock(x, y - world.AirHeight).type == PixelBlock.GenericBlackTransparent)
-            return;
-
-        DigbotPlayer playerObj = players[player.Username];
-
-        List<IPlacedBlock> blockList = [];
-        PixelBlock currentType = world.GetBlock(x, y - world.AirHeight).type;
-        world.MineBlock(playerObj, x, y - world.AirHeight);
-        PixelBlock newBlock = world.GetBlock(x, y - world.AirHeight).type;
-        if (currentType != newBlock)
-        {
-            blockList.Add(new PlacedBlock(x, y, WorldLayer.Foreground, new BasicBlock(newBlock)));
-        }
-
-        (int, int)[] offsets = ranges()[playerObj.Perception];
-        // reveal blocks here
-
-        foreach (var (dx, dy) in offsets)
-        {
-            int newX = x + dx;
-            int newY = y + dy;
-            if (!world.Inside(newX, newY - world.AirHeight))
-                continue;
-            if (
-                world.GetBlock(newX, newY - world.AirHeight).type
-                != PixelBlock.GenericBlackTransparent
-            )
-                continue;
-            var list = world.Blocks.Where(block => block.condition(playerObj, (x, y)));
-            int randomWeight = random.Next(list.Sum(block => block.weight));
-            var block = list.First(block => (randomWeight -= block.weight) < 0).block;
-            world.RevealBlock(newX, newY - world.AirHeight, block);
-            blockList.Add(
-                new PlacedBlock(newX, newY, WorldLayer.Foreground, new BasicBlock(block))
-            );
-        }
-
-        Task.Run(async () =>
-        {
-            await Task.Delay(100);
-            client.SendRange(blockList.ToChunkedPackets());
-        });
-    }
-}
 
 (PixelPilotClient, JoinData) SetupWorld(DigbotWorld worldTemplate)
 {
@@ -173,7 +38,34 @@ void HandlePlayerMovedPacket(
         if (players.ContainsKey(player.Username)) { }
         else
         {
-            players.Add(player.Username, new DigbotPlayer() { });
+            if (
+                player.Username == Environment.GetEnvironmentVariable("OWNER_USER")!
+                || player.Username == Environment.GetEnvironmentVariable("BOT_USER")!
+            )
+            {
+                players.Add(
+                    player.Username,
+                    new DigbotPlayer() { Role = DigbotPlayerRole.Owner, Username = player.Username }
+                );
+            }
+            else if (immune.Contains(player.Username))
+            {
+                players.Add(
+                    player.Username,
+                    new DigbotPlayer()
+                    {
+                        Role = DigbotPlayerRole.Immune,
+                        Username = player.Username,
+                    }
+                );
+            }
+            else
+            {
+                players.Add(
+                    player.Username,
+                    new DigbotPlayer() { Role = DigbotPlayerRole.None, Username = player.Username }
+                );
+            }
         }
         if (players[player.Username].Banned)
         {
@@ -193,19 +85,27 @@ void HandlePlayerMovedPacket(
             client,
             new System.Drawing.Point(worldTemplate.Width / 2 - 19, 5)
         );
-        spaceshipStructure.Blocks.PasteInOrder(
-            client,
-            new System.Drawing.Point(worldTemplate.Width / 2 - 19, 5)
-        );
-        for (int x = 0; x < worldTemplate.Width; x++) { 
-            blocklist.Add(new PlacedBlock(x, 0, WorldLayer.Foreground, new BasicBlock(PixelBlock.Empty)));
-		}
+        for (int x = 0; x < worldTemplate.Width; x++)
+        {
+            blocklist.Add(
+                new PlacedBlock(x, 0, WorldLayer.Foreground, new BasicBlock(PixelBlock.Empty))
+            );
+        }
         for (int y = 0; y < worldTemplate.AirHeight; y++)
         {
-            blocklist.Add(new PlacedBlock(worldTemplate.Width - 1, y, WorldLayer.Foreground, new BasicBlock(PixelBlock.Empty)));
-            blocklist.Add(new PlacedBlock(0, y, WorldLayer.Foreground, new BasicBlock(PixelBlock.Empty)));
+            blocklist.Add(
+                new PlacedBlock(
+                    worldTemplate.Width - 1,
+                    y,
+                    WorldLayer.Foreground,
+                    new BasicBlock(PixelBlock.Empty)
+                )
+            );
+            blocklist.Add(
+                new PlacedBlock(0, y, WorldLayer.Foreground, new BasicBlock(PixelBlock.Empty))
+            );
         }
-		client.SendRange(blocklist.ToChunkedPackets());
+        client.SendRange(blocklist.ToChunkedPackets());
         client.Send(new PlayerFacePacket() { FaceId = 17 });
         client.Send(
             new PlayerMovedPacket()
@@ -213,6 +113,10 @@ void HandlePlayerMovedPacket(
                 Position = new PointDouble() { X = worldTemplate.Width * 8 - 8, Y = 320 },
                 TickId = 100,
             }
+        );
+        spaceshipStructure.Blocks.PasteInOrder(
+            client,
+            new System.Drawing.Point(worldTemplate.Width / 2 - 19, 5)
         );
         worldTemplate.Reset(client);
     };
@@ -227,13 +131,119 @@ void HandlePlayerMovedPacket(
         if (player == null)
             return;
 
+        DigbotPlayer playerObj = players[player.Username];
+
         switch (packet)
         {
             case PlayerChatPacket chatPacket:
-                HandlePlayerChatPacket(chatPacket, player, client, worldTemplate, random);
+                if (!chatPacket.Message.StartsWith('.'))
+                    return;
+
+                var fullText = chatPacket.Message[1..]; // Skip leading '.'
+                var args = fullText.Split(' ');
+
+                if (args.Length < 1)
+                    return;
+                Console.WriteLine(args[0]);
+
+                if (worldTemplate.Commands.TryGetValue(args[0].ToLower(), out var command))
+                {
+                    Console.WriteLine(args[0]);
+                    command.Execute(args[1..], playerObj, client, worldTemplate, random);
+                }
+                else
+                {
+                    client.Send(
+                        new PlayerChatPacket()
+                        {
+                            Message = $"/dm ${player.Id} That command can't be used in this world",
+                        }
+                    );
+                }
                 break;
+
             case PlayerMovedPacket movedPacket:
-                HandlePlayerMovedPacket(movedPacket, player, client, worldTemplate, random);
+                int x = (int)((movedPacket.Position.X / 16.0) + 0.5);
+                int y = (int)((movedPacket.Position.Y / 16.0) + 0.5);
+                if (y < worldTemplate.AirHeight - 1 || !worldTemplate.Breaking)
+                    return;
+                if (
+                    movedPacket.SpaceJustDown
+                    && Math.Abs(movedPacket.Horizontal + movedPacket.Vertical) == 1
+                )
+                {
+                    if (movedPacket.Horizontal != 0)
+                    {
+                        x += movedPacket.Horizontal;
+                    }
+                    else
+                    {
+                        y += movedPacket.Vertical;
+                    }
+
+                    if (!worldTemplate.Inside(x, y - worldTemplate.AirHeight))
+                        return;
+                    if (
+                        worldTemplate.GetBlock(x, y - worldTemplate.AirHeight).type
+                        == PixelBlock.Empty
+                    )
+                        return;
+                    if (
+                        worldTemplate.GetBlock(x, y - worldTemplate.AirHeight).type
+                        == PixelBlock.GenericBlackTransparent
+                    )
+                        return;
+
+                    List<IPlacedBlock> blockList = [];
+                    PixelBlock currentType = worldTemplate
+                        .GetBlock(x, y - worldTemplate.AirHeight)
+                        .type;
+                    worldTemplate.MineBlock(playerObj, x, y - worldTemplate.AirHeight);
+                    PixelBlock newBlock = worldTemplate
+                        .GetBlock(x, y - worldTemplate.AirHeight)
+                        .type;
+                    if (currentType != newBlock)
+                    {
+                        blockList.Add(
+                            new PlacedBlock(x, y, WorldLayer.Foreground, new BasicBlock(newBlock))
+                        );
+                    }
+
+                    (int, int)[] offsets = ranges()[playerObj.Perception];
+
+                    foreach (var (dx, dy) in offsets)
+                    {
+                        int newX = x + dx;
+                        int newY = y + dy;
+                        if (!worldTemplate.Inside(newX, newY - worldTemplate.AirHeight))
+                            continue;
+                        if (
+                            worldTemplate.GetBlock(newX, newY - worldTemplate.AirHeight).type
+                            != PixelBlock.GenericBlackTransparent
+                        )
+                            continue;
+                        var list = worldTemplate.Blocks.Where(block =>
+                            block.condition(playerObj, (x, y))
+                        );
+                        int randomWeight = random.Next(list.Sum(block => block.weight));
+                        var block = list.First(block => (randomWeight -= block.weight) < 0).block;
+                        worldTemplate.RevealBlock(newX, newY - worldTemplate.AirHeight, block);
+                        blockList.Add(
+                            new PlacedBlock(
+                                newX,
+                                newY,
+                                WorldLayer.Foreground,
+                                new BasicBlock(block)
+                            )
+                        );
+                    }
+
+                    Task.Run(async () =>
+                    {
+                        await Task.Delay(100);
+                        client.SendRange(blockList.ToChunkedPackets());
+                    });
+                }
                 break;
         }
     };
@@ -249,9 +259,29 @@ void HandlePlayerMovedPacket(
     );
 }
 
+Command CommandReset = new()
+{
+    Execute = (args, player, client, world, random) =>
+    {
+        if (player.Role == DigbotPlayerRole.Owner)
+        {
+            world.Reset(client);
+        }
+    },
+    Roles = [DigbotPlayerRole.Owner],
+};
+
+Command CommandHelp = new()
+{
+    Execute = (args, player, client, world, random) =>
+    {
+        var commands = world.Commands.Where(command => command.Value.Roles.Contains(player.Role));
+        client.Send(new PlayerChatPacket() { Message = "" });
+    },
+    Roles = [DigbotPlayerRole.Owner, DigbotPlayerRole.Immune, DigbotPlayerRole.None],
+};
+
 DigbotWorld voidWorld = new(
-    "Void",
-    PixelBlock.BasicBlack,
     (type, position) =>
     {
         if (type == PixelBlock.BasicBlack)
@@ -268,7 +298,9 @@ DigbotWorld voidWorld = new(
                 return (type, newHealth);
             }
             else
+            {
                 return (PixelBlock.Empty, 0.0f);
+            }
         }
         else
         {
@@ -280,7 +312,14 @@ DigbotWorld voidWorld = new(
             else
                 return (PixelBlock.Empty, 0.0f);
         }
-    },
+    }
+)
+{
+    Name = "Void",
+    Ground = PixelBlock.BasicBlack,
+    BlockState = new (PixelBlock, float health)[400, 360],
+    AirHeight = 40,
+    Blocks =
     [
         (PixelBlock.BasicBlack, 1000, (player, position) => true),
         (PixelBlock.BasicRed, 5, (player, position) => true),
@@ -288,13 +327,11 @@ DigbotWorld voidWorld = new(
         (PixelBlock.BasicGreen, 5, (player, position) => true),
         (PixelBlock.BasicYellow, 5, (player, position) => true),
         (PixelBlock.BasicCyan, 5, (player, position) => true),
-    ]
-);
+    ],
+    Commands = new() { { "reset", CommandReset }, { "help", CommandHelp } },
+};
 
 var (client, data) = SetupWorld(voidWorld);
-
-Console.WriteLine(data.WorldHeight);
-Console.WriteLine(data.WorldWidth);
 
 await client.Connect($"digbot_void", data);
 

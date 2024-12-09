@@ -1,3 +1,4 @@
+using digbot;
 using PixelPilot.Client;
 using PixelPilot.Client.World.Blocks;
 using PixelPilot.Client.World.Blocks.Placed;
@@ -5,57 +6,47 @@ using PixelPilot.Client.World.Constants;
 using PixelPilot.Structures.Extensions;
 using PixelWalker.Networking.Protobuf.WorldPackets;
 
-namespace Digbot.DigbotClasses
+namespace digbot.Classes
 {
-    public class DigbotWorld
+    public class DigbotWorld(
+        Func<PixelBlock, (int x, int y), float> setHealthCalculator,
+        Func<
+            DigbotPlayer,
+            PixelBlock,
+            (int x, int y),
+            float,
+            (PixelBlock, float)
+        > mineHealthCalculator
+    )
     {
-        public string Name { get; }
-        public int Width { get; } = 400;
-        public int AirHeight { get; } = 40;
-        public int Height { get; } = 400;
-        private readonly Func<PixelBlock, (int x, int y), float> _maxHealthCalculator;
+        public required string Name;
+        public int Width
+        {
+            get => BlockState.GetLength(0);
+        }
+        public int Height
+        {
+            get => BlockState.GetLength(1) + AirHeight;
+        }
+        public required int AirHeight;
+        private readonly Func<PixelBlock, (int x, int y), float> _maxHealthCalculator =
+            setHealthCalculator;
         private readonly Func<
             DigbotPlayer,
             PixelBlock,
             (int x, int y),
             float,
             (PixelBlock, float)
-        > _mineHealthCalculator;
-        public (PixelBlock type, float health)[,] BlockState { get; private set; }
-        public PixelBlock Ground { get; }
+        > _mineHealthCalculator = mineHealthCalculator;
+        public required (PixelBlock type, float health)[,] BlockState;
+        public required PixelBlock Ground;
         public bool Breaking;
-        public List<(
+        public required List<(
             PixelBlock block,
             int weight,
             Func<DigbotPlayer, (int x, int y), bool> condition
-        )> Blocks { get; }
-
-        public DigbotWorld(
-            string name,
-            PixelBlock ground,
-            Func<PixelBlock, (int x, int y), float> setHealthCalculator,
-            Func<
-                DigbotPlayer,
-                PixelBlock,
-                (int x, int y),
-                float,
-                (PixelBlock, float)
-            > mineHealthCalculator,
-            List<(
-                PixelBlock block,
-                int weight,
-                Func<DigbotPlayer, (int x, int y), bool> condition
-            )> blocks
-        )
-        {
-            Name = name;
-            Ground = ground;
-            Blocks = blocks;
-            _maxHealthCalculator = setHealthCalculator;
-            _mineHealthCalculator = mineHealthCalculator;
-            Breaking = false;
-            BlockState = new (PixelBlock, float)[Width, Height - AirHeight];
-        }
+        )> Blocks;
+        public required CaseInsensitiveDictionary<Command> Commands;
 
         public bool Inside(int x, int y)
         {
@@ -65,7 +56,7 @@ namespace Digbot.DigbotClasses
         public void Reset(PixelPilotClient client)
         {
             Breaking = false;
-            client.Send(new PlayerChatPacket() { Message = "/resetplayer @a[username!=DIGBOT]" });
+            client.Send(new PlayerChatPacket() { Message = $"/resetplayer @a[username!=DIGBOT]" });
 
             var blockList = new List<IPlacedBlock>();
             for (int x = 0; x < Width; x++)

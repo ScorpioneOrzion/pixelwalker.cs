@@ -1,4 +1,4 @@
-namespace Digbot.DigbotClasses
+namespace digbot.Classes
 {
     public enum DamageType
     {
@@ -9,9 +9,17 @@ namespace Digbot.DigbotClasses
         Electric,
     }
 
+    public enum DigbotPlayerRole
+    {
+        None,
+        Immune,
+        Owner,
+    }
+
     public class DigbotPlayer
     {
         public bool Banned = false;
+        public required DigbotPlayerRole Role;
         public int Perception = 1;
         public float Power = 1f;
         public float MaxHealth = 100f;
@@ -21,6 +29,8 @@ namespace Digbot.DigbotClasses
             get => _health;
             set => _health = Math.Clamp(value, 0, MaxHealth);
         }
+        public required string Username;
+
         public Defense FlatDefense = new()
         {
             Resistance = 0f,
@@ -40,7 +50,7 @@ namespace Digbot.DigbotClasses
             Explosion = 0f,
         };
         public float Luck = 0f;
-        public DigbotPlayerInventory Inventory = new DigbotPlayerInventory();
+        public PlayerInventory Inventory = new();
 
         public void TakeDamage(float damage, DamageType type)
         {
@@ -59,6 +69,15 @@ namespace Digbot.DigbotClasses
                 ModifiedDamage = 1 / (FlatDefense + 1);
             }
             Health -= ModifiedDamage * (1 - PercentageDefense.Type(type));
+        }
+
+        public void GainItem(DigbotItem item, int amount)
+        {
+            if (!Inventory.Items.ContainsKey(item))
+            {
+                Inventory.Items[item] = 0;
+            }
+            Inventory.Items[item] += amount;
         }
     }
 }

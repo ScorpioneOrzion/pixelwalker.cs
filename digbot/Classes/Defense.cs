@@ -1,4 +1,4 @@
-namespace Digbot.DigbotClasses
+namespace digbot.Classes
 {
     public class Defense
     {
