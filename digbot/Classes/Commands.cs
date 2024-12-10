@@ -1,7 +1,6 @@
-using digbot.Classes;
 using PixelPilot.Client;
 
-namespace digbot
+namespace digbot.Classes
 {
     public class Command
     {

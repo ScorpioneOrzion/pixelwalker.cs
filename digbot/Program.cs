@@ -1,4 +1,3 @@
-using digbot;
 using digbot.Classes;
 using dotenv.net;
 using PixelPilot.Client;
@@ -15,11 +14,21 @@ DotEnv.Load(options: new DotEnvOptions(envFilePaths: ["../.env"]));
 
 string email = Environment.GetEnvironmentVariable("DIGBOT_EMAIL")!;
 string password = Environment.GetEnvironmentVariable("DIGBOT_PASS")!;
-string[] immune = Environment.GetEnvironmentVariable("IMMUNE")!.Split("|");
+
+Dictionary<string, DigbotPlayerRole> SetRoles = new()
+{
+    { "DIGBOT", DigbotPlayerRole.Owner },
+    { "SCORPIONEORZION", DigbotPlayerRole.Owner },
+    { "MARTEN", DigbotPlayerRole.Immune },
+    { "JOHN", DigbotPlayerRole.Immune },
+    { "ANATOLY", DigbotPlayerRole.Immune },
+    { "PRIDDLE", DigbotPlayerRole.Immune },
+    { "REALMS", DigbotPlayerRole.Immune },
+};
 
 var players = new Dictionary<string, DigbotPlayer> { };
 
-(PixelPilotClient, JoinData) SetupWorld(DigbotWorld worldTemplate)
+(PixelPilotClient, string joinKey) SetupWorld(DigbotWorld worldTemplate)
 {
     var client = PixelPilotClient
         .Builder()
@@ -38,25 +47,98 @@ var players = new Dictionary<string, DigbotPlayer> { };
         if (players.ContainsKey(player.Username)) { }
         else
         {
-            if (
-                player.Username == Environment.GetEnvironmentVariable("OWNER_USER")!
-                || player.Username == Environment.GetEnvironmentVariable("BOT_USER")!
-            )
+            if (SetRoles.TryGetValue(player.Username.ToUpper(), out var role))
             {
                 players.Add(
                     player.Username,
-                    new DigbotPlayer() { Role = DigbotPlayerRole.Owner, Username = player.Username }
+                    new DigbotPlayer() { Username = player.Username, Role = role }
                 );
             }
-            else if (immune.Contains(player.Username))
+            else
             {
                 players.Add(
                     player.Username,
-                    new DigbotPlayer()
-                    {
-                        Role = DigbotPlayerRole.Immune,
-                        Username = player.Username,
-                    }
+                    new DigbotPlayer() { Role = DigbotPlayerRole.None, Username = player.Username }
+                );
+            }
+        }
+        if (players[player.Username].Banned)
+        {
+            client.Send(
+                new PlayerChatPacket() { Message = $"/kick {player.Username} You're still banned" }
+            );
+            client.Send(new PlayerChatPacket() { Message = $"/unkick {player.Username}" });
+        }
+    };
+
+    client.OnPacketReceived += (_, packet) =>
+    {
+        var playerId = packet.GetPlayerId();
+        if (playerId == null)
+            return;
+
+        var player = playerManager.GetPlayer(playerId.Value);
+        if (player == null)
+            return;
+
+        DigbotPlayer playerObj = players[player.Username];
+
+        switch (packet)
+        {
+            case PlayerChatPacket chatPacket:
+                if (!chatPacket.Message.StartsWith('.'))
+                    return;
+
+                var fullText = chatPacket.Message[1..]; // Skip leading '.'
+                var args = fullText.Split(' ');
+
+                if (args.Length < 1)
+                    return;
+
+                if (worldTemplate.Commands.TryGetValue(args[0].ToLower(), out var command))
+                {
+                    command.Execute(args[1..], playerObj, client, worldTemplate, random);
+                }
+                else
+                {
+                    client.Send(
+                        new PlayerChatPacket()
+                        {
+                            Message = $"/dm ${player.Id} That command can't be used in this world",
+                        }
+                    );
+                }
+                break;
+        }
+    };
+
+    return (client, worldTemplate.Name);
+}
+
+(PixelPilotClient, string joinKey, JoinData) SetupCustomWorld(DigbotWorld worldTemplate)
+{
+    var client = PixelPilotClient
+        .Builder()
+        .SetEmail(email)
+        .SetPassword(password)
+        .SetAutomaticReconnect(false)
+        .Build();
+
+    var random = new Random();
+
+    var playerManager = new PlayerManager();
+    client.OnPacketReceived += playerManager.HandlePacket;
+
+    playerManager.OnPlayerJoined += (_, player) =>
+    {
+        if (players.ContainsKey(player.Username)) { }
+        else
+        {
+            if (SetRoles.TryGetValue(player.Username.ToUpper(), out var role))
+            {
+                players.Add(
+                    player.Username,
+                    new DigbotPlayer() { Username = player.Username, Role = role }
                 );
             }
             else
@@ -144,11 +226,9 @@ var players = new Dictionary<string, DigbotPlayer> { };
 
                 if (args.Length < 1)
                     return;
-                Console.WriteLine(args[0]);
 
                 if (worldTemplate.Commands.TryGetValue(args[0].ToLower(), out var command))
                 {
-                    Console.WriteLine(args[0]);
                     command.Execute(args[1..], playerObj, client, worldTemplate, random);
                 }
                 else
@@ -248,25 +328,29 @@ var players = new Dictionary<string, DigbotPlayer> { };
         }
     };
 
+    string WorldTitle = $"[Digbot] {worldTemplate.Name}";
+    string joinKey = WorldTitle.Replace("[", "").Replace("]", "").Replace(" ", "_");
+
     return (
         client,
+        joinKey,
         new JoinData()
         {
             WorldHeight = worldTemplate.Height,
             WorldWidth = worldTemplate.Width,
-            WorldTitle = $"[Digbot] {worldTemplate.Name}",
+            WorldTitle = WorldTitle,
         }
     );
 }
+
+var activeClients = new List<PixelPilotClient>();
+CaseInsensitiveDictionary<DigbotWorld> worlds = [];
 
 Command CommandReset = new()
 {
     Execute = (args, player, client, world, random) =>
     {
-        if (player.Role == DigbotPlayerRole.Owner)
-        {
-            world.Reset(client);
-        }
+        world.Reset(client);
     },
     Roles = [DigbotPlayerRole.Owner],
 };
@@ -279,6 +363,38 @@ Command CommandHelp = new()
         client.Send(new PlayerChatPacket() { Message = "" });
     },
     Roles = [DigbotPlayerRole.Owner, DigbotPlayerRole.Immune, DigbotPlayerRole.None],
+};
+
+Command CommandSpawn = new()
+{
+    Execute = (args, player, client, world, random) =>
+    {
+        _ = StartWorld(args[0]);
+    },
+    Roles = [DigbotPlayerRole.Owner],
+};
+
+Command CommandExit = new()
+{
+    Execute = (args, player, client, world, random) =>
+    {
+        client.Disconnect();
+    },
+    Roles = [DigbotPlayerRole.Owner],
+};
+
+CaseInsensitiveDictionary<Command> LobbyCommands = new()
+{
+    { "help", CommandHelp },
+    { "spawn", CommandSpawn },
+};
+
+CaseInsensitiveDictionary<Command> GeneralCommands = new()
+{
+    { "reset", CommandReset },
+    { "help", CommandHelp },
+    { "spawn", CommandSpawn },
+    { "exit", CommandExit },
 };
 
 DigbotWorld voidWorld = new(
@@ -328,14 +444,120 @@ DigbotWorld voidWorld = new(
         (PixelBlock.BasicYellow, 5, (player, position) => true),
         (PixelBlock.BasicCyan, 5, (player, position) => true),
     ],
-    Commands = new() { { "reset", CommandReset }, { "help", CommandHelp } },
+    Commands = GeneralCommands,
 };
 
-var (client, data) = SetupWorld(voidWorld);
+DigbotWorld coreWorld = new(
+    (type, position) =>
+    {
+        return 0f;
+    },
+    (player, type, position, health) =>
+    {
+        return (type, 0f);
+    }
+)
+{
+    Name = "The Core",
+    Ground = PixelBlock.Empty,
+    BlockState = new (PixelBlock, float health)[400, 360],
+    AirHeight = 40,
+    Blocks =
+    [
+        (PixelBlock.GenericBlack, 1, (player, position) => true),
+        (PixelBlock.GenericBlack, 1, (player, position) => true),
+    ],
+    Commands = GeneralCommands,
+};
 
-await client.Connect($"digbot_void", data);
+worlds.Add("void", voidWorld);
+worlds.Add("core", coreWorld);
 
-await client.WaitForDisconnect();
+DigbotWorld Lobby = new(
+    (type, position) =>
+    {
+        return 0f;
+    },
+    (player, type, position, health) =>
+    {
+        return (type, 0f);
+    }
+)
+{
+    Name = "rc720d56548cfa1",
+    Ground = PixelBlock.Empty,
+    BlockState = new (PixelBlock, float health)[0, 0],
+    AirHeight = 0,
+    Blocks = [],
+    Commands = new() { { "spawn", CommandSpawn } },
+};
+
+var (client, joinKey) = SetupWorld(Lobby);
+
+async Task StartWorld(string worldKey)
+{
+    if (!worlds.TryGetValue(worldKey, out var world))
+    {
+        Console.WriteLine($"World '{worldKey}' not found!");
+        return;
+    }
+
+    var (client, joinKey, data) = SetupCustomWorld(world);
+
+    try
+    {
+        await client.Connect(joinKey, data);
+        lock (activeClients)
+        {
+            activeClients.Add(client);
+        }
+
+        await client.WaitForDisconnect();
+    }
+    finally
+    {
+        lock (activeClients)
+        {
+            activeClients.Remove(client);
+        }
+    }
+}
+
+await client.Connect(joinKey);
+activeClients.Add(client);
+async Task Init()
+{
+    try
+    {
+        await client.WaitForDisconnect();
+    }
+    finally
+    {
+        lock (activeClients)
+        {
+            activeClients.Remove(client);
+        }
+    }
+}
+_ = Init();
+while (true)
+{
+    await Task.Delay(TimeSpan.FromMinutes(5));
+    lock (activeClients)
+    {
+        if (activeClients.Count == 0)
+        {
+            Console.WriteLine("No active clients remaining. Exiting...");
+            break;
+        }
+        else
+        {
+            Console.WriteLine(
+                $"{activeClients.Count} clients still active. Checking again in 5 minutes..."
+            );
+        }
+    }
+}
 
 Dictionary<int, (int dx, int dy)[]> ranges()
 {
