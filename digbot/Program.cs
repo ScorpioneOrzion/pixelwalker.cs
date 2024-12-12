@@ -109,6 +109,8 @@ var players = new Dictionary<string, DigbotPlayer> { };
                     );
                 }
                 break;
+            default:
+                break;
         }
     };
 
@@ -278,7 +280,12 @@ var players = new Dictionary<string, DigbotPlayer> { };
                     PixelBlock currentType = worldTemplate
                         .GetBlock(x, y - worldTemplate.AirHeight)
                         .type;
-                    worldTemplate.MineBlock(playerObj, x, y - worldTemplate.AirHeight);
+                    worldTemplate.ActBlock(
+                        ActionType.Mine,
+                        playerObj,
+                        (x, y - worldTemplate.AirHeight),
+                        PixelBlock.Empty
+                    );
                     PixelBlock newBlock = worldTemplate
                         .GetBlock(x, y - worldTemplate.AirHeight)
                         .type;
@@ -307,7 +314,12 @@ var players = new Dictionary<string, DigbotPlayer> { };
                         );
                         int randomWeight = random.Next(list.Sum(block => block.weight));
                         var block = list.First(block => (randomWeight -= block.weight) < 0).block;
-                        worldTemplate.RevealBlock(newX, newY - worldTemplate.AirHeight, block);
+                        worldTemplate.ActBlock(
+                            ActionType.Reveal,
+                            playerObj,
+                            (newX, newY - worldTemplate.AirHeight),
+                            block
+                        );
                         blockList.Add(
                             new PlacedBlock(
                                 newX,
@@ -324,6 +336,8 @@ var players = new Dictionary<string, DigbotPlayer> { };
                         client.SendRange(blockList.ToChunkedPackets());
                     });
                 }
+                break;
+            default:
                 break;
         }
     };
@@ -392,17 +406,20 @@ CaseInsensitiveDictionary<Command> LobbyCommands = new()
 CaseInsensitiveDictionary<Command> GeneralCommands = new()
 {
     { "reset", CommandReset },
-    { "help", CommandHelp },
-    { "spawn", CommandSpawn },
     { "exit", CommandExit },
 };
+foreach (var command in LobbyCommands)
+{
+    GeneralCommands[command.Key] = command.Value;
+}
+;
 
-DigbotWorld voidWorld = new(
+/*
     (type, position) =>
     {
         if (type == PixelBlock.BasicBlack)
-            return 5.0f;
-        return 10.0f;
+            return (type, 5.0f);
+        return (type, 10.0f);
     },
     (player, type, position, health) =>
     {
@@ -429,6 +446,37 @@ DigbotWorld voidWorld = new(
                 return (PixelBlock.Empty, 0.0f);
         }
     }
+*/
+
+DigbotWorld voidWorld = new(
+    (action, actor, oldBlock, newBlock, position, health) =>
+    {
+        (PixelBlock newBlock, float health) Handle(
+            Actor actor,
+            PixelBlock oldBlock,
+            float health,
+            float power
+        )
+        {
+            health -= power;
+            if (health <= 0)
+            {
+                return (PixelBlock.Empty, 0.0f);
+            }
+            return (oldBlock, health);
+        }
+
+        return action switch
+        {
+            ActionType.Reveal => (
+                newBlock == PixelBlock.BasicBlack ? PixelBlock.Empty : newBlock,
+                5.0f
+            ),
+            ActionType.Mine => Handle(actor, oldBlock, health, actor.Power / 2),
+            ActionType.Drill => Handle(actor, oldBlock, health, actor.Power * 2),
+            _ => (oldBlock, health),
+        };
+    }
 )
 {
     Name = "Void",
@@ -448,24 +496,29 @@ DigbotWorld voidWorld = new(
 };
 
 DigbotWorld coreWorld = new(
-    (type, position) =>
+    (action, actor, oldblock, newBlock, position, health) =>
     {
-        return 0f;
-    },
-    (player, type, position, health) =>
-    {
-        return (type, 0f);
+        return (newBlock, 0f);
     }
 )
 {
     Name = "The Core",
-    Ground = PixelBlock.Empty,
+    Ground = PixelBlock.BasicBlack,
     BlockState = new (PixelBlock, float health)[400, 360],
     AirHeight = 40,
     Blocks =
     [
-        (PixelBlock.GenericBlack, 1, (player, position) => true),
-        (PixelBlock.GenericBlack, 1, (player, position) => true),
+        (PixelBlock.LavaYellow, 1, (player, position) => true),
+        (PixelBlock.LavaOrange, 1, (player, position) => true),
+        (PixelBlock.LavaDarkOrange, 1, (player, position) => true),
+        (PixelBlock.GemstoneGreen, 1, (player, position) => true),
+        (PixelBlock.GemstonePurple, 1, (player, position) => true),
+        (PixelBlock.GemstoneYellow, 1, (player, position) => true),
+        (PixelBlock.GemstoneBlue, 1, (player, position) => true),
+        (PixelBlock.GemstoneRed, 1, (player, position) => true),
+        (PixelBlock.GemstoneCyan, 1, (player, position) => true),
+        (PixelBlock.GemstoneWhite, 1, (player, position) => true),
+        (PixelBlock.GemstoneBlack, 1, (player, position) => true),
     ],
     Commands = GeneralCommands,
 };
@@ -474,13 +527,9 @@ worlds.Add("void", voidWorld);
 worlds.Add("core", coreWorld);
 
 DigbotWorld Lobby = new(
-    (type, position) =>
+    (action, actor, oldblock, newBlock, position, health) =>
     {
-        return 0f;
-    },
-    (player, type, position, health) =>
-    {
-        return (type, 0f);
+        return (PixelBlock.Empty, 0f);
     }
 )
 {

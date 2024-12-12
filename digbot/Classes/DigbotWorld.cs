@@ -8,17 +8,32 @@ using PixelWalker.Networking.Protobuf.WorldPackets;
 
 namespace digbot.Classes
 {
+    public enum ActionType
+    {
+        Reveal,
+        Mine,
+        Drill,
+        Freeze,
+        Burn,
+        Explode,
+        Poison,
+        Electrify,
+        Transform,
+    }
+
     public class DigbotWorld(
-        Func<PixelBlock, (int x, int y), float> setHealthCalculator,
         Func<
-            DigbotPlayer,
+            ActionType,
+            Actor,
+            PixelBlock,
             PixelBlock,
             (int x, int y),
             float,
             (PixelBlock, float)
-        > mineHealthCalculator
+        > HealthCalculator
     )
     {
+        private readonly World World = new() { Power = 0f };
         public required string Name;
         public int Width
         {
@@ -29,15 +44,15 @@ namespace digbot.Classes
             get => BlockState.GetLength(1) + AirHeight;
         }
         public required int AirHeight;
-        private readonly Func<PixelBlock, (int x, int y), float> _maxHealthCalculator =
-            setHealthCalculator;
         private readonly Func<
-            DigbotPlayer,
+            ActionType,
+            Actor,
+            PixelBlock,
             PixelBlock,
             (int x, int y),
             float,
             (PixelBlock, float)
-        > _mineHealthCalculator = mineHealthCalculator;
+        > _HealthCalculator = HealthCalculator;
         public required (PixelBlock type, float health)[,] BlockState;
         public required PixelBlock Ground;
         public bool Breaking;
@@ -64,7 +79,7 @@ namespace digbot.Classes
                 blockList.Add(
                     new PlacedBlock(x, 40, WorldLayer.Foreground, new BasicBlock(Ground))
                 );
-                RevealBlock(x, 0, Ground);
+                ActBlock(ActionType.Reveal, World, (x, 0), Ground);
             }
             client.SendRange(blockList.ToChunkedPackets());
             for (int y = 1; y < Height - AirHeight; y++)
@@ -87,27 +102,24 @@ namespace digbot.Classes
             client.SendRange(blockList.ToChunkedPackets());
         }
 
-        public void RevealBlock(int x, int y, PixelBlock setType)
+        public void ActBlock(
+            ActionType action,
+            Actor actor,
+            (int x, int y) position,
+            PixelBlock newBlock
+        )
         {
-            if (Inside(x, y))
+            if (Inside(position.x, position.y))
             {
-                float health = _maxHealthCalculator(setType, (x, y));
-                BlockState[x, y] = (setType, health);
-            }
-        }
-
-        public void MineBlock(DigbotPlayer player, int x, int y)
-        {
-            if (Inside(x, y))
-            {
-                (PixelBlock blockType, float health) = BlockState[x, y];
-                (PixelBlock newType, float newHealth) = _mineHealthCalculator(
-                    player,
-                    blockType,
-                    (x, y),
+                var (oldBlock, health) = BlockState[position.x, position.y];
+                BlockState[position.x, position.y] = _HealthCalculator(
+                    action,
+                    actor,
+                    oldBlock,
+                    newBlock,
+                    position,
                     health
                 );
-                BlockState[x, y] = (newType, newHealth);
             }
         }
 
