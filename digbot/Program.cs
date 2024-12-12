@@ -283,7 +283,8 @@ var players = new Dictionary<string, DigbotPlayer> { };
                     worldTemplate.ActBlock(
                         ActionType.Mine,
                         playerObj,
-                        (x, y - worldTemplate.AirHeight),
+                        x,
+                        y - worldTemplate.AirHeight,
                         PixelBlock.Empty
                     );
                     PixelBlock newBlock = worldTemplate
@@ -317,7 +318,8 @@ var players = new Dictionary<string, DigbotPlayer> { };
                         worldTemplate.ActBlock(
                             ActionType.Reveal,
                             playerObj,
-                            (newX, newY - worldTemplate.AirHeight),
+                            newX,
+                            newY - worldTemplate.AirHeight,
                             block
                         );
                         blockList.Add(

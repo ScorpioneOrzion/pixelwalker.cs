@@ -81,7 +81,7 @@ namespace digbot.Classes
                 blockList.Add(
                     new PlacedBlock(x, 40, WorldLayer.Foreground, new BasicBlock(Ground))
                 );
-                ActBlock(ActionType.Reveal, World, (x, 0), Ground);
+                ActBlock(ActionType.Reveal, World, x, 0, Ground);
             }
             client.SendRange(blockList.ToChunkedPackets());
             for (int y = 1; y < Height - AirHeight; y++)
@@ -104,6 +104,11 @@ namespace digbot.Classes
             client.SendRange(blockList.ToChunkedPackets());
         }
 
+        public void ActBlock(ActionType action, Actor actor, int x, int y, PixelBlock newBlock)
+        {
+            ActBlock(action, actor, (x, y), newBlock);
+        }
+
         public void ActBlock(
             ActionType action,
             Actor actor,
@@ -113,7 +118,7 @@ namespace digbot.Classes
         {
             if (Inside(position.x, position.y))
             {
-                var (oldBlock, health) = BlockState[position.x, position.y];
+                var (oldBlock, health) = GetBlock(position);
                 BlockState[position.x, position.y] = _HealthCalculator(
                     this,
                     action,
@@ -124,6 +129,11 @@ namespace digbot.Classes
                     health
                 );
             }
+        }
+
+        public (PixelBlock type, float health) GetBlock((int x, int y) position)
+        {
+            return GetBlock(position.x, position.y);
         }
 
         public (PixelBlock type, float health) GetBlock(int x, int y)
