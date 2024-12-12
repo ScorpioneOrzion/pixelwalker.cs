@@ -414,40 +414,6 @@ foreach (var command in LobbyCommands)
 }
 ;
 
-/*
-    (type, position) =>
-    {
-        if (type == PixelBlock.BasicBlack)
-            return (type, 5.0f);
-        return (type, 10.0f);
-    },
-    (player, type, position, health) =>
-    {
-        if (type != PixelBlock.BasicBlack)
-        {
-            float newHealth = health -= player.Power / 2;
-            if (newHealth > 0f)
-            {
-                return (type, newHealth);
-            }
-            else
-            {
-                return (PixelBlock.Empty, 0.0f);
-            }
-        }
-        else
-        {
-            float newHealth = health -= player.Power;
-            if (newHealth > 0f)
-            {
-                return (type, newHealth);
-            }
-            else
-                return (PixelBlock.Empty, 0.0f);
-        }
-    }
-*/
-
 DigbotWorld voidWorld = new(
     (action, actor, oldBlock, newBlock, position, health) =>
     {
