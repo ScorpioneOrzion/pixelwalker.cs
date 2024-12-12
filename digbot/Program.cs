@@ -415,9 +415,9 @@ foreach (var command in LobbyCommands)
 ;
 
 DigbotWorld voidWorld = new(
-    (action, actor, oldBlock, newBlock, position, health) =>
+    (world, action, actor, oldBlock, newBlock, position, health) =>
     {
-        (PixelBlock newBlock, float health) Handle(
+        (PixelBlock newBlock, float health) HandleDamage(
             Actor actor,
             PixelBlock oldBlock,
             float health,
@@ -438,8 +438,8 @@ DigbotWorld voidWorld = new(
                 newBlock == PixelBlock.BasicBlack ? PixelBlock.Empty : newBlock,
                 5.0f
             ),
-            ActionType.Mine => Handle(actor, oldBlock, health, actor.Power / 2),
-            ActionType.Drill => Handle(actor, oldBlock, health, actor.Power * 2),
+            ActionType.Mine => HandleDamage(actor, oldBlock, health, actor.Power / 2),
+            ActionType.Drill => HandleDamage(actor, oldBlock, health, actor.Power * 2),
             _ => (oldBlock, health),
         };
     }
@@ -462,7 +462,7 @@ DigbotWorld voidWorld = new(
 };
 
 DigbotWorld coreWorld = new(
-    (action, actor, oldblock, newBlock, position, health) =>
+    (world, action, actor, oldblock, newBlock, position, health) =>
     {
         return (newBlock, 0f);
     }
@@ -493,7 +493,7 @@ worlds.Add("void", voidWorld);
 worlds.Add("core", coreWorld);
 
 DigbotWorld Lobby = new(
-    (action, actor, oldblock, newBlock, position, health) =>
+    (world, action, actor, oldblock, newBlock, position, health) =>
     {
         return (PixelBlock.Empty, 0f);
     }

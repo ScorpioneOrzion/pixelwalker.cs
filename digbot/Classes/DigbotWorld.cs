@@ -23,6 +23,7 @@ namespace digbot.Classes
 
     public class DigbotWorld(
         Func<
+            DigbotWorld,
             ActionType,
             Actor,
             PixelBlock,
@@ -45,6 +46,7 @@ namespace digbot.Classes
         }
         public required int AirHeight;
         private readonly Func<
+            DigbotWorld,
             ActionType,
             Actor,
             PixelBlock,
@@ -113,6 +115,7 @@ namespace digbot.Classes
             {
                 var (oldBlock, health) = BlockState[position.x, position.y];
                 BlockState[position.x, position.y] = _HealthCalculator(
+                    this,
                     action,
                     actor,
                     oldBlock,
