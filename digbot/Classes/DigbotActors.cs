@@ -1,96 +1,8 @@
 namespace digbot.Classes
 {
-    public enum DamageType
-    {
-        Physical,
-        Explosion,
-        Fire,
-        Poison,
-        Electric,
-    }
+    public class DamageReduce(float baseValue = 0.0f) : Attributes<DamageType, float>(baseValue) { }
 
-    public enum DigbotPlayerRole
-    {
-        None,
-        Immune,
-        Owner,
-    }
-
-    public class Defense
-    {
-        public float Resistance = 0.0f;
-        public float Physical = 0.0f;
-        public float Fire = 0.0f;
-        public float Poison = 0.0f;
-        public float Electric = 0.0f;
-        public float Explosion = 0.0f;
-
-        public float Type(DamageType type)
-        {
-            return type switch
-            {
-                DamageType.Physical => Resistance + Physical,
-                DamageType.Fire => Resistance + Fire,
-                DamageType.Poison => Resistance + Poison,
-                DamageType.Electric => Resistance + Electric,
-                DamageType.Explosion => Resistance + Explosion,
-                _ => Resistance,
-            };
-        }
-
-        public static Defense operator +(Defense a, Defense b)
-        {
-            return new Defense
-            {
-                Resistance = a.Resistance + b.Resistance,
-                Physical = a.Physical + b.Physical,
-                Fire = a.Fire + b.Fire,
-                Poison = a.Poison + b.Poison,
-                Electric = a.Electric + b.Electric,
-                Explosion = a.Explosion + b.Explosion,
-            };
-        }
-
-        public static Defense operator -(Defense a, Defense b)
-        {
-            return new Defense
-            {
-                Resistance = a.Resistance - b.Resistance,
-                Physical = a.Physical - b.Physical,
-                Fire = a.Fire - b.Fire,
-                Poison = a.Poison - b.Poison,
-                Electric = a.Electric - b.Electric,
-                Explosion = a.Explosion - b.Explosion,
-            };
-        }
-
-        public static Defense operator *(Defense a, dynamic b)
-        {
-            if (b is Defense)
-            {
-                return new Defense
-                {
-                    Resistance = a.Resistance * b.Resistance,
-                    Physical = a.Physical * b.Physical,
-                    Fire = a.Fire * b.Fire,
-                    Poison = a.Poison * b.Poison,
-                    Electric = a.Electric * b.Electric,
-                    Explosion = a.Explosion * b.Explosion,
-                };
-            }
-            else if (b is int || b is float || b is double)
-                return new Defense
-                {
-                    Resistance = a.Resistance * b,
-                    Physical = a.Physical * b,
-                    Fire = a.Fire * b,
-                    Poison = a.Poison * b,
-                    Electric = a.Electric * b,
-                    Explosion = a.Explosion * b,
-                };
-            throw new ArgumentException("Unsupported type for multiplication");
-        }
-    }
+    public class ItemLimits(int baseValue = 0) : Attributes<ItemType, int>(baseValue) { }
 
     public abstract class Actor
     {
@@ -116,29 +28,16 @@ namespace digbot.Classes
             MaxHealth = maxHealth;
             Health = maxHealth;
 
-            FlatDefense = new Defense
-            {
-                Resistance = 0f,
-                Physical = 0f,
-                Fire = 0f,
-                Poison = 0f,
-                Electric = 0f,
-                Explosion = 0f,
-            };
+            FlatDefense = new DamageReduce { };
 
-            PercentageDefense = new Defense
-            {
-                Resistance = 0f,
-                Physical = 0f,
-                Fire = 0f,
-                Poison = 0f,
-                Electric = 0f,
-                Explosion = 0f,
-            };
+            PercentageDefense = new DamageReduce { };
+
+            ItemLimits = new ItemLimits { };
         }
 
-        public Defense FlatDefense { get; protected set; }
-        public Defense PercentageDefense { get; protected set; }
+        public ItemLimits ItemLimits { get; private set; }
+        public DamageReduce FlatDefense { get; private set; }
+        public DamageReduce PercentageDefense { get; private set; }
         private readonly Dictionary<DigbotItem, int> _inventory = [];
         public IReadOnlyDictionary<DigbotItem, int> Inventory => _inventory.AsReadOnly();
 
@@ -152,8 +51,11 @@ namespace digbot.Classes
             {
                 _inventory[item] = amount;
             }
-            FlatDefense += item.FlatDefenseBoost * amount;
-            PercentageDefense += item.PercentageDefenseBoost * amount;
+            FlatDefense = (DamageReduce)(FlatDefense + item.FlatDefenseBoost * amount);
+            PercentageDefense = (DamageReduce)(
+                PercentageDefense + item.PercentageDefenseBoost * amount
+            );
+            ItemLimits = (ItemLimits)(ItemLimits + item.LimitBoost * amount);
             Power += item.PowerBoost * amount;
             MaxHealth += item.HealthBoost * amount;
             Luck += item.LuckBoost * amount;
@@ -173,8 +75,11 @@ namespace digbot.Classes
             {
                 _inventory[item] -= amount;
             }
-            FlatDefense -= item.FlatDefenseBoost * amount;
-            PercentageDefense -= item.PercentageDefenseBoost * amount;
+            FlatDefense = (DamageReduce)(FlatDefense - item.FlatDefenseBoost * amount);
+            PercentageDefense = (DamageReduce)(
+                PercentageDefense - item.PercentageDefenseBoost * amount
+            );
+            ItemLimits = (ItemLimits)(ItemLimits - item.LimitBoost * amount);
             Power -= item.PowerBoost * amount;
             MaxHealth -= item.HealthBoost * amount;
             Luck -= item.LuckBoost * amount;
@@ -183,7 +88,7 @@ namespace digbot.Classes
 
         public void TakeDamage(float damage, DamageType type)
         {
-            float flatDefense = FlatDefense.Type(type);
+            float flatDefense = FlatDefense[type];
             float ModifiedDamage;
             if (flatDefense + 1 < damage)
             {
@@ -197,7 +102,7 @@ namespace digbot.Classes
             {
                 ModifiedDamage = 1 / (flatDefense + 1);
             }
-            Health -= ModifiedDamage * (1 - PercentageDefense.Type(type));
+            Health -= ModifiedDamage * (1 - PercentageDefense[type]);
         }
     }
 

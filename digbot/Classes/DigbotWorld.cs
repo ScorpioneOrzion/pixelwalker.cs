@@ -1,4 +1,3 @@
-using digbot;
 using PixelPilot.Client;
 using PixelPilot.Client.World.Blocks;
 using PixelPilot.Client.World.Blocks.Placed;
@@ -8,19 +7,6 @@ using PixelWalker.Networking.Protobuf.WorldPackets;
 
 namespace digbot.Classes
 {
-    public enum ActionType
-    {
-        Reveal,
-        Mine,
-        Drill,
-        Freeze,
-        Burn,
-        Explode,
-        Poison,
-        Electrify,
-        Transform,
-    }
-
     public class DigbotWorld(
         Func<
             DigbotWorld,
