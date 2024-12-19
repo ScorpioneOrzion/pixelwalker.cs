@@ -2,8 +2,8 @@ namespace digbot.Classes
 {
     public class DigbotItem
     {
-        public required string Name;
-        public required string Description;
+        public string Name = "";
+        public string Description = "";
         public float HealthBoost = 0f;
         public float PowerBoost = 0f;
         public DamageReduce FlatDefenseBoost = new();
@@ -12,8 +12,20 @@ namespace digbot.Classes
         public float LuckBoost = 0f;
         public int PerceptionBoost = 0;
         public int TypeUse = 0;
-        public required (ItemType, ActionType?) Type;
-        public required Action Use;
+        public (ItemType, ActionType?) Type;
+        public Action<DigbotPlayer, DigbotItem> Use = (player, item) => { };
+        public bool Hidden = false;
         public float Time = 0f;
+    }
+
+    public class HiddenDigbotItem : DigbotItem
+    {
+        public HiddenDigbotItem()
+        {
+            Name = "";
+            Description = "";
+            Type = (ItemType.Miscellaneous, null);
+            Hidden = true;
+        }
     }
 }
