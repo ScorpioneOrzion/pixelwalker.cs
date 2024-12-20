@@ -5,7 +5,7 @@ namespace digbot.Classes
 {
     public class Registry
     {
-        public static readonly CaseInsensitiveDictionary<Command> Commands = new()
+        public static readonly CaseInsensitiveDictionary<DigbotCommand> Commands = new()
         {
             {
                 "reset",
@@ -148,13 +148,13 @@ namespace digbot.Classes
                                 actor,
                                 oldBlock,
                                 health,
-                                actor.Power / 2
+                                actor.GetPower / 2
                             ),
                             ActionType.Drill => HandleDamage(
                                 actor,
                                 oldBlock,
                                 health,
-                                actor.Power * 2
+                                actor.GetPower * 2
                             ),
                             _ => (oldBlock, health),
                         };
@@ -178,33 +178,206 @@ namespace digbot.Classes
                 }
             },
         };
+
         public static readonly CaseInsensitiveDictionary<DigbotItem> Items = new()
         {
             {
-                "power",
-                new HiddenDigbotItem() { PowerBoost = 1f }
+                "StaticPower",
+                new HiddenDigbotItem() { PowerBoost = (1f, 0f) }
             },
             {
-                "health",
-                new HiddenDigbotItem() { HealthBoost = 1f }
+                "RelativePower",
+                new HiddenDigbotItem() { PowerBoost = (0f, 1f) }
             },
             {
-                "luck",
-                new HiddenDigbotItem() { LuckBoost = 1f }
+                "StaticHealth",
+                new HiddenDigbotItem() { HealthBoost = (1f, 0f) }
+            },
+            {
+                "RelativeHealth",
+                new HiddenDigbotItem() { HealthBoost = (0f, 1f) }
+            },
+            {
+                "StaticLuck",
+                new HiddenDigbotItem() { LuckBoost = (1f, 0f) }
+            },
+            {
+                "RelativeLuck",
+                new HiddenDigbotItem() { LuckBoost = (0f, 1f) }
+            },
+            {
+                "StaticPerception",
+                new HiddenDigbotItem() { PerceptionBoost = 1 }
+            },
+            {
+                "healthPotion0",
+                new()
+                {
+                    Name = "Small Health Potion",
+                    Description = "Restores 20 Hp",
+                    Use = player =>
+                    {
+                        if (Items != null)
+                        {
+                            player.RemoveItems(Items["healthPotion0"]);
+                            player.Health += 20f;
+                        }
+                    },
+                }
             },
             {
                 "healthPotion1",
                 new()
                 {
-                    Name = "Small Health Potion",
-                    Description = "Restores 20 Hp",
-                    Use = (player, item) =>
+                    Name = "Health Potion",
+                    Description = "Restores 50 Hp",
+                    Use = player =>
                     {
-                        player.RemoveItems(item);
-                        player.Health += 20f;
+                        if (Items != null)
+                        {
+                            player.RemoveItems(Items["healthPotion1"]);
+                            player.Health += 50f;
+                        }
+                    },
+                }
+            },
+            {
+                "healthPotion2",
+                new()
+                {
+                    Name = "Large Health Potion",
+                    Description = "Restores 100 Hp",
+                    Use = player =>
+                    {
+                        if (Items != null)
+                        {
+                            player.RemoveItems(Items["healthPotion2"]);
+                            player.Health += 100f;
+                        }
                     },
                 }
             },
         };
+        public static readonly CaseInsensitiveDictionary<(
+            DigbotItem Normal,
+            DigbotItem Equipped
+        )> EquippedItems = [];
+
+        public static void Initialize()
+        {
+            EquippedItems.Add(
+                "starterPickaxe",
+                GenerateTool(
+                    "Starter Pickaxe",
+                    "A basic pickaxe",
+                    1,
+                    (ItemType.Tool, ActionType.Drill),
+                    null,
+                    new() { PowerBoost = (1f, 0) },
+                    null
+                )
+            );
+
+            EquippedItems.Add(
+                "starterDrill",
+                GenerateTool(
+                    "Starter Drill",
+                    "A basic drill",
+                    1,
+                    (ItemType.Tool, ActionType.Drill),
+                    null,
+                    new() { PowerBoost = (2f, 0) },
+                    null
+                )
+            );
+        }
+
+        public class PartialDigbotItem
+        {
+            public (float a, float r) PowerBoost;
+            public (float a, float r) HealthBoost;
+            public (float a, float r) LuckBoost;
+            public int PerceptionBoost;
+            public DamageReduce FlatDefenseBoost = new();
+            public DamageReduce PercentageDefenseBoost = new();
+            public ItemLimits LimitBoost = new();
+
+            public static PartialDigbotItem operator +(PartialDigbotItem a, PartialDigbotItem b)
+            {
+                return new()
+                {
+                    PowerBoost = (a.PowerBoost.a + b.PowerBoost.a, a.PowerBoost.r + b.PowerBoost.r),
+                    HealthBoost = (
+                        a.HealthBoost.a + b.HealthBoost.a,
+                        a.HealthBoost.r + b.HealthBoost.r
+                    ),
+                    LuckBoost = (a.LuckBoost.a + b.LuckBoost.a, a.LuckBoost.r + b.LuckBoost.r),
+                    PerceptionBoost = a.PerceptionBoost + b.PerceptionBoost,
+                    FlatDefenseBoost = (DamageReduce)(a.FlatDefenseBoost + b.FlatDefenseBoost),
+                    PercentageDefenseBoost = (DamageReduce)(
+                        a.PercentageDefenseBoost + b.PercentageDefenseBoost
+                    ),
+                    LimitBoost = (ItemLimits)(a.LimitBoost + b.LimitBoost),
+                };
+            }
+        }
+
+        public static (DigbotItem Normal, DigbotItem Equipped) GenerateTool(
+            string name,
+            string description,
+            int typeUse,
+            (ItemType, ActionType?) type,
+            PartialDigbotItem? passiveBoost,
+            PartialDigbotItem? activeBoost,
+            float? time
+        )
+        {
+            passiveBoost ??= new();
+            activeBoost ??= new();
+            activeBoost += passiveBoost;
+            DigbotItem normal = new()
+            {
+                Name = name,
+                Description = description,
+                Type = type,
+                PowerBoost = passiveBoost.PowerBoost,
+                HealthBoost = passiveBoost.HealthBoost,
+                LuckBoost = passiveBoost.LuckBoost,
+                PerceptionBoost = passiveBoost.PerceptionBoost,
+                FlatDefenseBoost = passiveBoost.FlatDefenseBoost,
+                PercentageDefenseBoost = passiveBoost.PercentageDefenseBoost,
+                LimitBoost = passiveBoost.LimitBoost,
+            };
+            DigbotItem equipped = new()
+            {
+                Name = name,
+                Description = description,
+                TypeUse = typeUse,
+                Type = type,
+                Time = time ?? 0f,
+                PowerBoost = activeBoost.PowerBoost,
+                HealthBoost = activeBoost.HealthBoost,
+                LuckBoost = activeBoost.LuckBoost,
+                PerceptionBoost = activeBoost.PerceptionBoost,
+                FlatDefenseBoost = activeBoost.FlatDefenseBoost,
+                PercentageDefenseBoost = activeBoost.PercentageDefenseBoost,
+                LimitBoost = activeBoost.LimitBoost,
+            };
+            normal.Use = player =>
+            {
+                if (player.ItemLimits[type.Item1] < typeUse)
+                {
+                    return;
+                }
+                player.RemoveItems(normal);
+                player.AddItems(equipped);
+            };
+            equipped.Use = player =>
+            {
+                player.RemoveItems(equipped);
+                player.AddItems(normal);
+            };
+            return (normal, equipped);
+        }
     }
 }

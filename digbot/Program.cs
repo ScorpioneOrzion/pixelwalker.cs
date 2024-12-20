@@ -3,11 +3,7 @@ using dotenv.net;
 using PixelPilot.Client;
 using PixelPilot.Client.Messages.Packets.Extensions;
 using PixelPilot.Client.Players.Basic;
-using PixelPilot.Client.World.Blocks;
-using PixelPilot.Client.World.Blocks.Placed;
 using PixelPilot.Client.World.Constants;
-using PixelPilot.Structures.Converters.PilotSimple;
-using PixelPilot.Structures.Extensions;
 using PixelWalker.Networking.Protobuf.WorldPackets;
 
 DotEnv.Load(options: new DotEnvOptions(envFilePaths: ["../.env"]));
@@ -27,6 +23,9 @@ Dictionary<string, DigbotPlayerRole> SetRoles = new()
 };
 
 var players = new Dictionary<string, DigbotPlayer> { };
+
+Registry.Initialize();
+var TimeManager = new TimeManager();
 
 (PixelPilotClient, string joinKey) SetupWorld(DigbotWorld worldTemplate)
 {
@@ -51,14 +50,24 @@ var players = new Dictionary<string, DigbotPlayer> { };
             {
                 players.Add(
                     player.Username,
-                    new DigbotPlayer() { Username = player.Username, Role = role }
+                    new DigbotPlayer()
+                    {
+                        Username = player.Username,
+                        Role = role,
+                        TimeManager = TimeManager,
+                    }
                 );
             }
             else
             {
                 players.Add(
                     player.Username,
-                    new DigbotPlayer() { Role = DigbotPlayerRole.None, Username = player.Username }
+                    new DigbotPlayer()
+                    {
+                        Role = DigbotPlayerRole.None,
+                        Username = player.Username,
+                        TimeManager = TimeManager,
+                    }
                 );
             }
         }

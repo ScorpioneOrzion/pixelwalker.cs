@@ -1,38 +1,76 @@
 namespace digbot.Classes
 {
-    public class DamageReduce(float baseValue = 0.0f) : Attributes<DamageType, float>(baseValue) { }
+    public class DamageReduce(float baseValue = 0) : Attributes<DamageType, float>(baseValue) { }
 
     public class ItemLimits(int baseValue = 0) : Attributes<ItemType, int>(baseValue) { }
 
     public abstract class Actor
     {
-        public float Power { get; set; }
+        private (float a, float r) _power = (0, 0);
+
+        public float AbsolutePower
+        {
+            get => _power.a;
+            set => _power.a = value;
+        }
+
+        public float RelativePower
+        {
+            get => _power.r;
+            set => _power.r = value;
+        }
+
+        public float GetPower => AbsolutePower * (1 + RelativePower);
     }
 
     public class World : Actor { }
 
     public abstract class Entity : Actor
     {
-        public float MaxHealth;
+        public required TimeManager TimeManager;
+        private (float a, float r) _maxHealth;
+        public float AbsoluteMaxHealth
+        {
+            get => _maxHealth.a;
+            set => _maxHealth.a = value;
+        }
+        public float RelativeMaxHealth
+        {
+            get => _maxHealth.r;
+            set => _maxHealth.r = value;
+        }
+        public float MaxHealth => AbsoluteMaxHealth * (1 + RelativeMaxHealth);
         private float _health;
-        public int Perception = 1;
-        public float Luck = 0f;
         public float Health
         {
             get => _health;
             set => _health = Math.Clamp(value, 0, MaxHealth);
         }
 
+        public int Perception = 1;
+        private (float a, float r) _luck = (0, 0);
+        public float AbsoluteLuck
+        {
+            get => _luck.a;
+            set => _luck.a = value;
+        }
+        public float RelativeLuck
+        {
+            get => _luck.r;
+            set => _luck.r = value;
+        }
+        public float Luck => AbsoluteLuck * (1 + RelativeLuck);
+
         protected Entity(float maxHealth = 100f)
         {
-            MaxHealth = maxHealth;
+            AbsoluteMaxHealth = maxHealth;
             Health = maxHealth;
 
-            FlatDefense = new DamageReduce { };
+            FlatDefense = new() { };
 
-            PercentageDefense = new DamageReduce { };
+            PercentageDefense = new() { };
 
-            ItemLimits = new ItemLimits { };
+            ItemLimits = new() { };
         }
 
         public ItemLimits ItemLimits { get; private set; }
@@ -56,10 +94,18 @@ namespace digbot.Classes
                 PercentageDefense + item.PercentageDefenseBoost * amount
             );
             ItemLimits = (ItemLimits)(ItemLimits + item.LimitBoost * amount);
-            Power += item.PowerBoost * amount;
-            MaxHealth += item.HealthBoost * amount;
-            Luck += item.LuckBoost * amount;
+            ItemLimits[item.Type.Item1] -= item.TypeUse * amount;
+            AbsolutePower += item.PowerBoost.a * amount;
+            RelativePower += item.PowerBoost.r * amount;
+            AbsoluteMaxHealth += item.HealthBoost.a * amount;
+            RelativeMaxHealth += item.HealthBoost.r * amount;
+            AbsoluteLuck += item.LuckBoost.a * amount;
+            RelativeLuck += item.LuckBoost.r * amount;
             Perception += item.PerceptionBoost * amount;
+            if (item.Time > 0)
+            {
+                TimeManager.AddTimer(item, this, item.Time);
+            }
         }
 
         public void RemoveItems(DigbotItem item, int amount = 1)
@@ -80,9 +126,13 @@ namespace digbot.Classes
                 PercentageDefense - item.PercentageDefenseBoost * amount
             );
             ItemLimits = (ItemLimits)(ItemLimits - item.LimitBoost * amount);
-            Power -= item.PowerBoost * amount;
-            MaxHealth -= item.HealthBoost * amount;
-            Luck -= item.LuckBoost * amount;
+            ItemLimits[item.Type.Item1] += item.TypeUse * amount;
+            AbsolutePower -= item.PowerBoost.a * amount;
+            RelativePower -= item.PowerBoost.r * amount;
+            AbsoluteMaxHealth -= item.HealthBoost.a * amount;
+            RelativeMaxHealth -= item.HealthBoost.r * amount;
+            AbsoluteLuck -= item.LuckBoost.a * amount;
+            RelativeLuck -= item.LuckBoost.r * amount;
             Perception -= item.PerceptionBoost * amount;
         }
 
@@ -110,7 +160,7 @@ namespace digbot.Classes
     {
         public DigbotPlayer()
         {
-            Power = 1f;
+            AbsolutePower = 1;
         }
 
         public bool Banned = false;
