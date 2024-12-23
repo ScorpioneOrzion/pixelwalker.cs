@@ -210,6 +210,10 @@ namespace digbot.Classes
                 new HiddenDigbotItem() { PerceptionBoost = 1 }
             },
             {
+                "GoldGain",
+                new HiddenDigbotItem() { GoldChange = 1f }
+            },
+            {
                 "healthPotion0",
                 new()
                 {
@@ -223,6 +227,7 @@ namespace digbot.Classes
                             player.Health += 20f;
                         }
                     },
+                    Gold = 10f,
                 }
             },
             {
@@ -239,6 +244,7 @@ namespace digbot.Classes
                             player.Health += 50f;
                         }
                     },
+                    Gold = 25f,
                 }
             },
             {
@@ -255,6 +261,79 @@ namespace digbot.Classes
                             player.Health += 100f;
                         }
                     },
+                    Gold = 50f,
+                }
+            },
+            {
+                "saphiriteOre",
+                new()
+                {
+                    Name = "Saphirite Ore",
+                    Description = "A chunk of saphirite ore",
+                    Gold = 5f,
+                }
+            },
+            {
+                "stiratiteOre",
+                new()
+                {
+                    Name = "Stiratite Ore",
+                    Description = "A chunk of stiratite ore",
+                    Gold = 5f,
+                }
+            },
+            {
+                "crotinniumOre",
+                new()
+                {
+                    Name = "Crotinnium Ore",
+                    Description = "A chunk of crotinnium ore",
+                    Gold = 5f,
+                }
+            },
+            {
+                "jivoliteOre",
+                new()
+                {
+                    Name = "Jivolite Ore",
+                    Description = "A chunk of jivolite ore",
+                    Gold = 5f,
+                }
+            },
+            {
+                "crushedSaphirite",
+                new()
+                {
+                    Name = "Crushed Saphirite",
+                    Description = "Crushed saphirite ore",
+                    Gold = 10f,
+                }
+            },
+            {
+                "crushedStiratite",
+                new()
+                {
+                    Name = "Crushed Stiratite",
+                    Description = "Crushed stiratite ore",
+                    Gold = 10f,
+                }
+            },
+            {
+                "crushedCrotinnium",
+                new()
+                {
+                    Name = "Crushed Crotinnium",
+                    Description = "Crushed crotinnium ore",
+                    Gold = 10f,
+                }
+            },
+            {
+                "crushedJivolite",
+                new()
+                {
+                    Name = "Crushed Jivolite",
+                    Description = "Crushed jivolite ore",
+                    Gold = 10f,
                 }
             },
         };
@@ -297,6 +376,8 @@ namespace digbot.Classes
             public (float a, float r) PowerBoost;
             public (float a, float r) HealthBoost;
             public (float a, float r) LuckBoost;
+            public float GoldChange;
+            public float Gold;
             public int PerceptionBoost;
             public DamageReduce FlatDefenseBoost = new();
             public DamageReduce PercentageDefenseBoost = new();
@@ -317,6 +398,8 @@ namespace digbot.Classes
                     PercentageDefenseBoost = (DamageReduce)(
                         a.PercentageDefenseBoost + b.PercentageDefenseBoost
                     ),
+                    GoldChange = a.GoldChange + b.GoldChange,
+                    Gold = a.Gold + b.Gold,
                     LimitBoost = (ItemLimits)(a.LimitBoost + b.LimitBoost),
                 };
             }
@@ -347,6 +430,8 @@ namespace digbot.Classes
                 FlatDefenseBoost = passiveBoost.FlatDefenseBoost,
                 PercentageDefenseBoost = passiveBoost.PercentageDefenseBoost,
                 LimitBoost = passiveBoost.LimitBoost,
+                GoldChange = passiveBoost.GoldChange,
+                Gold = passiveBoost.Gold,
             };
             DigbotItem equipped = new()
             {
@@ -362,6 +447,8 @@ namespace digbot.Classes
                 FlatDefenseBoost = activeBoost.FlatDefenseBoost,
                 PercentageDefenseBoost = activeBoost.PercentageDefenseBoost,
                 LimitBoost = activeBoost.LimitBoost,
+                GoldChange = activeBoost.GoldChange,
+                Gold = 0f,
             };
             normal.Use = player =>
             {

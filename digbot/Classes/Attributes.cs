@@ -162,10 +162,46 @@ namespace digbot.Classes
         public (float a, float r) LuckBoost = (0, 0);
         public int PerceptionBoost = 0;
         public int TypeUse = 0;
+        public float Gold = 0f;
+        public float GoldChange = 0f;
         public (ItemType, ActionType?) Type;
         public Action<Entity> Use = player => { };
         public bool Hidden = false;
         public float Time = 0f;
+
+        public void Buy(Entity player, int amount = 1)
+        {
+            if (amount <= 0)
+                return;
+            if (Gold == 0f)
+                return;
+            if (player.Gold < Gold)
+                return;
+            player.AddItems(this, amount);
+            player.Gold -= Gold * amount;
+        }
+
+        public void Sell(Entity player, string amount)
+        {
+            if (amount == "all")
+                Sell(player, player.Inventory[this]);
+            else if (int.TryParse(amount, out int num))
+                Sell(player, num);
+        }
+
+        public void Sell(Entity player, int amount = 1)
+        {
+            if (amount <= 0)
+                return;
+            if (Gold == 0f)
+                return;
+            if (!player.Inventory.ContainsKey(this))
+                return;
+            if (player.Inventory[this] < amount)
+                amount = player.Inventory[this];
+            player.AddItems(this, -amount);
+            player.Gold += (float)(Gold * amount * 0.9);
+        }
     }
 
     public class HiddenDigbotItem : DigbotItem
@@ -176,6 +212,7 @@ namespace digbot.Classes
             Description = "";
             Type = (ItemType.Miscellaneous, null);
             Hidden = true;
+            Gold = 0f;
         }
     }
 

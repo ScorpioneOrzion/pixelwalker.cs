@@ -61,6 +61,19 @@ namespace digbot.Classes
         }
         public float Luck => AbsoluteLuck * (1 + RelativeLuck);
 
+        private (float a, float r) _gold = (0f, 0f);
+
+        public float Gold
+        {
+            get => _gold.a;
+            set => _gold.a = value;
+        }
+        public float RelativeGold
+        {
+            get => _gold.r;
+            set => _gold.r = value;
+        }
+
         protected Entity(float maxHealth = 100f)
         {
             AbsoluteMaxHealth = maxHealth;
@@ -81,6 +94,8 @@ namespace digbot.Classes
 
         public void AddItems(DigbotItem item, int amount = 1)
         {
+            if (amount <= 0)
+                return;
             if (_inventory.ContainsKey(item))
             {
                 _inventory[item] += amount;
@@ -102,6 +117,7 @@ namespace digbot.Classes
             AbsoluteLuck += item.LuckBoost.a * amount;
             RelativeLuck += item.LuckBoost.r * amount;
             Perception += item.PerceptionBoost * amount;
+            RelativeGold += item.GoldChange * amount;
             if (item.Time > 0)
             {
                 TimeManager.AddTimer(item, this, item.Time);
@@ -110,6 +126,8 @@ namespace digbot.Classes
 
         public void RemoveItems(DigbotItem item, int amount = 1)
         {
+            if (amount <= 0)
+                return;
             if (!_inventory.TryGetValue(item, out int SetAmount))
                 return;
             if (amount >= SetAmount)
@@ -134,6 +152,7 @@ namespace digbot.Classes
             AbsoluteLuck -= item.LuckBoost.a * amount;
             RelativeLuck -= item.LuckBoost.r * amount;
             Perception -= item.PerceptionBoost * amount;
+            RelativeGold -= item.GoldChange * amount;
         }
 
         public void TakeDamage(float damage, DamageType type)
