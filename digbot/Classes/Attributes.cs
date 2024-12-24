@@ -230,9 +230,8 @@ namespace digbot.Classes
             (int x, int y, PixelBlock block, float health),
             (PixelBlock, float, int, int)[]
         > HealthCalculator
-    )
+    ) : Actor
     {
-        private readonly World World = new() { AbsolutePower = 0.0f, RelativePower = 0.0f };
         public required string Name;
         public int Width
         {
@@ -251,6 +250,7 @@ namespace digbot.Classes
             (int x, int y, PixelBlock block, float health),
             (PixelBlock, float, int, int)[]
         > _HealthCalculator = HealthCalculator;
+        public required float Difficulty;
         public required (PixelBlock type, float health)[,] BlockState;
         public required PixelBlock Ground;
         public bool Breaking;
@@ -277,7 +277,7 @@ namespace digbot.Classes
                 blockList.Add(
                     new PlacedBlock(x, 40, WorldLayer.Foreground, new BasicBlock(Ground))
                 );
-                ActBlock(ActionType.Reveal, World, x, 0, Ground);
+                ActBlock(ActionType.Reveal, this, x, 0, Ground);
             }
             client.SendRange(blockList.ToChunkedPackets());
             for (int y = 1; y < Height - AirHeight; y++)
@@ -351,6 +351,12 @@ namespace digbot.Classes
         > Execute;
 
         public required DigbotPlayerRole[] Roles;
+        public bool LobbyCommand = false;
+        public Action<string[], DigbotPlayer, PixelPilotClient> LobbyExecute = (
+            args,
+            player,
+            lobby
+        ) => { };
     }
 
     public class CaseInsensitiveDictionary<TValue> : Dictionary<string, TValue>

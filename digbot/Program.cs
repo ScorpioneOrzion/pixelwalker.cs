@@ -31,7 +31,12 @@ var players = new Dictionary<string, DigbotPlayer> { };
 Registry.Initialize();
 var TimeManager = new TimeManager();
 
-(PixelPilotClient, string joinKey) SetupWorld(DigbotWorld worldTemplate)
+string lobbyId = "rc720d56548cfa1";
+Dictionary<string, DigbotCommand> lobbyCommands =
+    (Dictionary<string, DigbotCommand>)
+        Registry.Commands.Where(command => command.Value.LobbyCommand);
+
+(PixelPilotClient, string joinKey) SetupWorld()
 {
     var client = PixelPilotClient
         .Builder()
@@ -108,9 +113,9 @@ var TimeManager = new TimeManager();
                 if (args.Length < 1)
                     return;
 
-                if (worldTemplate.Commands.TryGetValue(args[0].ToLower(), out var command))
+                if (lobbyCommands.TryGetValue(args[0].ToLower(), out var command))
                 {
-                    command.Execute(args[1..], playerObj, client, worldTemplate, random);
+                    command.LobbyExecute(args[1..], playerObj, client);
                 }
                 else
                 {
@@ -127,7 +132,7 @@ var TimeManager = new TimeManager();
         }
     };
 
-    return (client, worldTemplate.Name);
+    return (client, lobbyId);
 }
 
 (PixelPilotClient, string joinKey, JoinData) SetupCustomWorld(DigbotWorld worldTemplate)
@@ -385,22 +390,7 @@ var TimeManager = new TimeManager();
 var activeClients = new List<PixelPilotClient>();
 CaseInsensitiveDictionary<DigbotWorld> worlds = Registry.Worlds;
 
-DigbotWorld Lobby = new(
-    (world, action, actor, block, blockData) =>
-    {
-        return [(PixelBlock.Empty, 0f, blockData.x, blockData.y)];
-    }
-)
-{
-    Name = "rc720d56548cfa1",
-    Ground = PixelBlock.Empty,
-    BlockState = new (PixelBlock, float health)[0, 0],
-    AirHeight = 0,
-    Blocks = [],
-    Commands = [],
-};
-
-var (client, joinKey) = SetupWorld(Lobby);
+var (client, joinKey) = SetupWorld();
 
 async Task StartWorld(string worldKey)
 {

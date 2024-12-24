@@ -2,7 +2,9 @@ namespace digbot.Classes
 {
     public class ItemLimits(int baseValue = 0) : Attributes<ItemType, int>(baseValue) { }
 
-    public abstract class Actor
+    public abstract class Actor { }
+
+    public abstract class Entity : Actor
     {
         private (float a, float r) _power = (0, 0);
 
@@ -19,12 +21,6 @@ namespace digbot.Classes
         }
 
         public float GetPower => AbsolutePower * (1 + RelativePower);
-    }
-
-    public class World : Actor { }
-
-    public abstract class Entity : Actor
-    {
         public required TimeManager TimeManager;
 
         public int Perception = 1;

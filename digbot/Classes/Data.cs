@@ -40,6 +40,27 @@ namespace digbot.Classes
                             );
                         }
                     },
+                    LobbyCommand = true,
+                    LobbyExecute = (args, player, lobby) =>
+                    {
+                        if (args.Length == 0)
+                        {
+                            if (Commands is null)
+                            {
+                                return;
+                            }
+                            var commands = Commands
+                                .Where(command => command.Value.Roles.Contains(player.Role))
+                                .Select(command => command.Key);
+                            var commandsList = string.Join(", ", commands);
+                            lobby.Send(
+                                new PlayerChatPacket()
+                                {
+                                    Message = $"/dm {player.Username} {commandsList}",
+                                }
+                            );
+                        }
+                    },
                     Roles =
                     [
                         DigbotPlayerRole.Owner,
@@ -134,6 +155,7 @@ namespace digbot.Classes
                         (PixelBlock.GemstoneBlack, 1, (player, position) => true),
                     ],
                     Commands = Commands,
+                    Difficulty = 1,
                 }
             },
             {
@@ -177,6 +199,7 @@ namespace digbot.Classes
                         (PixelBlock.BasicCyan, 5, (player, position) => true),
                     ],
                     Commands = Commands,
+                    Difficulty = 1,
                 }
             },
         };
