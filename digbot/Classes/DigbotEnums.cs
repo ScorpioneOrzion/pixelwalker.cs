@@ -10,24 +10,14 @@ namespace digbot.Classes
     public enum ActionType
     {
         Reveal,
+        Equip,
+        Use,
+        AutoUse,
         Mine,
         Drill,
-        Freeze,
-        Burn,
         Explode,
-        Poison,
         Electrify,
         Transform,
-    }
-
-    public enum DamageType
-    {
-        Generic,
-        Physical,
-        Fire,
-        Poison,
-        Electric,
-        Explosion,
     }
 
     public enum ItemType

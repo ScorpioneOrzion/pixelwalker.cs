@@ -119,6 +119,11 @@ namespace digbot.Classes
             }
             throw new ArgumentException("Unsupported type for multiplication");
         }
+
+        public static Attributes<TType, TValue> operator *(dynamic a, Attributes<TType, TValue> b)
+        {
+            return b * a;
+        }
     }
 
     public class TimeManager
@@ -138,7 +143,7 @@ namespace digbot.Classes
                 time -= 1f / 60f;
                 if (time <= 0)
                 {
-                    item.Use(player);
+                    item.Use(player, ActionType.AutoUse);
                     _timers.RemoveAt(i);
                     i--;
                 }
@@ -156,16 +161,16 @@ namespace digbot.Classes
         public string Description = "";
         public (float a, float r) HealthBoost = (0, 0);
         public (float a, float r) PowerBoost = (0, 0);
-        public DamageReduce FlatDefenseBoost = new();
-        public DamageReduce PercentageDefenseBoost = new();
         public ItemLimits LimitBoost = new();
         public (float a, float r) LuckBoost = (0, 0);
         public int PerceptionBoost = 0;
         public int TypeUse = 0;
-        public float Gold = 0f;
-        public float GoldChange = 0f;
+        public (float a, float d) Gold = (0f, 0f);
         public (ItemType, ActionType?) Type;
-        public Action<Entity> Use = player => { };
+        public Func<Entity, ActionType, (float, ActionType)[]?> Use = (player, action) =>
+        {
+            return null;
+        };
         public bool Hidden = false;
         public float Time = 0f;
 
@@ -173,12 +178,12 @@ namespace digbot.Classes
         {
             if (amount <= 0)
                 return;
-            if (Gold == 0f)
+            if (Gold.a == 0f)
                 return;
-            if (player.Gold < Gold)
+            if (player.Gold < Gold.a * amount)
                 return;
             player.AddItems(this, amount);
-            player.Gold -= Gold * amount;
+            player.Gold -= Gold.a * amount;
         }
 
         public void Sell(Entity player, string amount)
@@ -193,14 +198,14 @@ namespace digbot.Classes
         {
             if (amount <= 0)
                 return;
-            if (Gold == 0f)
+            if (Gold.a == 0f)
                 return;
             if (!player.Inventory.ContainsKey(this))
                 return;
             if (player.Inventory[this] < amount)
                 amount = player.Inventory[this];
             player.AddItems(this, -amount);
-            player.Gold += (float)(Gold * amount * 0.9);
+            player.Gold += (float)(Gold.a * amount * 0.9);
         }
     }
 
@@ -212,7 +217,7 @@ namespace digbot.Classes
             Description = "";
             Type = (ItemType.Miscellaneous, null);
             Hidden = true;
-            Gold = 0f;
+            Gold.a = 0f;
         }
     }
 
@@ -222,10 +227,8 @@ namespace digbot.Classes
             ActionType,
             Actor,
             PixelBlock,
-            PixelBlock,
-            (int x, int y),
-            float,
-            (PixelBlock, float)
+            (int x, int y, PixelBlock block, float health),
+            (PixelBlock, float, int, int)[]
         > HealthCalculator
     )
     {
@@ -245,10 +248,8 @@ namespace digbot.Classes
             ActionType,
             Actor,
             PixelBlock,
-            PixelBlock,
-            (int x, int y),
-            float,
-            (PixelBlock, float)
+            (int x, int y, PixelBlock block, float health),
+            (PixelBlock, float, int, int)[]
         > _HealthCalculator = HealthCalculator;
         public required (PixelBlock type, float health)[,] BlockState;
         public required PixelBlock Ground;
@@ -299,29 +300,27 @@ namespace digbot.Classes
             client.SendRange(blockList.ToChunkedPackets());
         }
 
-        public void ActBlock(ActionType action, Actor actor, int x, int y, PixelBlock newBlock)
+        public void ActBlock(ActionType action, Actor actor, int x, int y, PixelBlock block)
         {
-            ActBlock(action, actor, (x, y), newBlock);
+            ActBlock(action, actor, (x, y), block);
         }
 
         public void ActBlock(
             ActionType action,
             Actor actor,
             (int x, int y) position,
-            PixelBlock newBlock
+            PixelBlock block
         )
         {
             if (Inside(position.x, position.y))
             {
                 var (oldBlock, health) = GetBlock(position);
-                BlockState[position.x, position.y] = _HealthCalculator(
+                var result = _HealthCalculator(
                     this,
                     action,
                     actor,
-                    oldBlock,
-                    newBlock,
-                    position,
-                    health
+                    block,
+                    (position.x, position.y, oldBlock, health)
                 );
             }
         }

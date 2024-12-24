@@ -91,9 +91,27 @@ namespace digbot.Classes
             {
                 "core",
                 new(
-                    (world, action, actor, oldblock, newBlock, position, health) =>
+                    (world, action, actor, block, blockData) =>
                     {
-                        return (newBlock, 0f);
+                        if (actor is Entity entity)
+                        {
+                            var result = entity
+                                .Inventory.ToArray()
+                                .AsParallel()
+                                .SelectMany(item =>
+                                {
+                                    // Assuming item.Key.Use returns (float, ActionType)[]?
+                                    var useResult = item.Key.Use(entity, action);
+                                    if (useResult != null)
+                                    {
+                                        return useResult;
+                                    }
+                                    return [];
+                                })
+                                .ToArray();
+                            // do stuff with result
+                        }
+                        return [(block, 0f, blockData.x, blockData.y)];
                     }
                 )
                 {
@@ -121,43 +139,27 @@ namespace digbot.Classes
             {
                 "void",
                 new(
-                    (world, action, actor, oldBlock, newBlock, position, health) =>
+                    (world, action, actor, block, blockData) =>
                     {
-                        static (PixelBlock newBlock, float health) HandleDamage(
-                            Actor actor,
-                            PixelBlock oldBlock,
-                            float health,
-                            float power
-                        )
+                        if (actor is Entity entity)
                         {
-                            health -= power;
-                            if (health <= 0)
-                            {
-                                return (PixelBlock.Empty, 0.0f);
-                            }
-                            return (oldBlock, health);
+                            var result = entity
+                                .Inventory.ToArray()
+                                .AsParallel()
+                                .SelectMany(item =>
+                                {
+                                    // Assuming item.Key.Use returns (float, ActionType)[]?
+                                    var useResult = item.Key.Use(entity, action);
+                                    if (useResult != null)
+                                    {
+                                        return useResult;
+                                    }
+                                    return [];
+                                })
+                                .ToArray();
+                            // do stuff with result
                         }
-
-                        return action switch
-                        {
-                            ActionType.Reveal => (
-                                newBlock == PixelBlock.BasicBlack ? PixelBlock.Empty : newBlock,
-                                5.0f
-                            ),
-                            ActionType.Mine => HandleDamage(
-                                actor,
-                                oldBlock,
-                                health,
-                                actor.GetPower / 2
-                            ),
-                            ActionType.Drill => HandleDamage(
-                                actor,
-                                oldBlock,
-                                health,
-                                actor.GetPower * 2
-                            ),
-                            _ => (oldBlock, health),
-                        };
+                        return [(block, 0f, blockData.x, blockData.y)];
                     }
                 )
                 {
@@ -209,133 +211,6 @@ namespace digbot.Classes
                 "StaticPerception",
                 new HiddenDigbotItem() { PerceptionBoost = 1 }
             },
-            {
-                "GoldGain",
-                new HiddenDigbotItem() { GoldChange = 1f }
-            },
-            {
-                "healthPotion0",
-                new()
-                {
-                    Name = "Small Health Potion",
-                    Description = "Restores 20 Hp",
-                    Use = player =>
-                    {
-                        if (Items != null)
-                        {
-                            player.RemoveItems(Items["healthPotion0"]);
-                            player.Health += 20f;
-                        }
-                    },
-                    Gold = 10f,
-                }
-            },
-            {
-                "healthPotion1",
-                new()
-                {
-                    Name = "Health Potion",
-                    Description = "Restores 50 Hp",
-                    Use = player =>
-                    {
-                        if (Items != null)
-                        {
-                            player.RemoveItems(Items["healthPotion1"]);
-                            player.Health += 50f;
-                        }
-                    },
-                    Gold = 25f,
-                }
-            },
-            {
-                "healthPotion2",
-                new()
-                {
-                    Name = "Large Health Potion",
-                    Description = "Restores 100 Hp",
-                    Use = player =>
-                    {
-                        if (Items != null)
-                        {
-                            player.RemoveItems(Items["healthPotion2"]);
-                            player.Health += 100f;
-                        }
-                    },
-                    Gold = 50f,
-                }
-            },
-            {
-                "saphiriteOre",
-                new()
-                {
-                    Name = "Saphirite Ore",
-                    Description = "A chunk of saphirite ore",
-                    Gold = 5f,
-                }
-            },
-            {
-                "stiratiteOre",
-                new()
-                {
-                    Name = "Stiratite Ore",
-                    Description = "A chunk of stiratite ore",
-                    Gold = 5f,
-                }
-            },
-            {
-                "crotinniumOre",
-                new()
-                {
-                    Name = "Crotinnium Ore",
-                    Description = "A chunk of crotinnium ore",
-                    Gold = 5f,
-                }
-            },
-            {
-                "jivoliteOre",
-                new()
-                {
-                    Name = "Jivolite Ore",
-                    Description = "A chunk of jivolite ore",
-                    Gold = 5f,
-                }
-            },
-            {
-                "crushedSaphirite",
-                new()
-                {
-                    Name = "Crushed Saphirite",
-                    Description = "Crushed saphirite ore",
-                    Gold = 10f,
-                }
-            },
-            {
-                "crushedStiratite",
-                new()
-                {
-                    Name = "Crushed Stiratite",
-                    Description = "Crushed stiratite ore",
-                    Gold = 10f,
-                }
-            },
-            {
-                "crushedCrotinnium",
-                new()
-                {
-                    Name = "Crushed Crotinnium",
-                    Description = "Crushed crotinnium ore",
-                    Gold = 10f,
-                }
-            },
-            {
-                "crushedJivolite",
-                new()
-                {
-                    Name = "Crushed Jivolite",
-                    Description = "Crushed jivolite ore",
-                    Gold = 10f,
-                }
-            },
         };
         public static readonly CaseInsensitiveDictionary<(
             DigbotItem Normal,
@@ -369,39 +244,117 @@ namespace digbot.Classes
                     null
                 )
             );
+
+            Dictionary<string, object> ores = new()
+            {
+                ["saphirite"] = new() { },
+                ["stiratite"] = new() { },
+                ["crotinnium"] = new() { },
+                ["jivolite"] = new() { },
+                ["karnite"] = new() { },
+                ["xenotite"] = new() { },
+                ["zorium"] = new() { },
+            };
+
+            string[] oreNames = [.. ores.Keys];
+            for (int i = 0; i < oreNames.Length; i++)
+            {
+                // Ore
+                Items.Add(
+                    $"{oreNames[i]}Ore",
+                    new()
+                    {
+                        Name = $"{oreNames[i][..1].ToUpper()}{oreNames[i][1..]} Ore",
+                        Description = $"A chunk of {oreNames[i]} ore",
+                    }
+                );
+
+                // Ingot
+                Items.Add(
+                    $"{oreNames[i]}Ingot",
+                    new()
+                    {
+                        Name = $"{oreNames[i][..1].ToUpper()}{oreNames[i][1..]} Ingot",
+                        Description = $"A bar of {oreNames[i]} ingot",
+                    }
+                );
+
+                // Pickaxe
+                EquippedItems.Add(
+                    $"{oreNames[i]}Pickaxe",
+                    GenerateTool(
+                        $"{oreNames[i][..1].ToUpper()}{oreNames[i][1..]} Pickaxe",
+                        $"A pickaxe made of {oreNames[i]}",
+                        1,
+                        (ItemType.Tool, ActionType.Mine),
+                        null,
+                        new() { PowerBoost = (5f, 0) },
+                        null
+                    )
+                );
+
+                // Drill
+                EquippedItems.Add(
+                    $"{oreNames[i]}Drill",
+                    GenerateTool(
+                        $"{oreNames[i][..1].ToUpper()}{oreNames[i][1..]} Drill",
+                        $"A drill made of {oreNames[i]}",
+                        1,
+                        (ItemType.Tool, ActionType.Drill),
+                        null,
+                        new() { PowerBoost = (10f, 0) },
+                        null
+                    )
+                );
+
+                // ore should cost 5
+                Items[$"{oreNames[i]}Ore"].Gold.a = 5f;
+                // ingot should cost 10
+                Items[$"{oreNames[i]}Ingot"].Gold.a = 10f;
+            }
         }
 
         public class PartialDigbotItem
         {
             public (float a, float r) PowerBoost;
-            public (float a, float r) HealthBoost;
             public (float a, float r) LuckBoost;
-            public float GoldChange;
-            public float Gold;
+            public (float a, float d) Gold = (0f, 0f);
             public int PerceptionBoost;
-            public DamageReduce FlatDefenseBoost = new();
-            public DamageReduce PercentageDefenseBoost = new();
             public ItemLimits LimitBoost = new();
+            public Func<Entity, ActionType, (float, ActionType)[]?> Use = (player, action) =>
+            {
+                return null;
+            };
 
             public static PartialDigbotItem operator +(PartialDigbotItem a, PartialDigbotItem b)
             {
                 return new()
                 {
                     PowerBoost = (a.PowerBoost.a + b.PowerBoost.a, a.PowerBoost.r + b.PowerBoost.r),
-                    HealthBoost = (
-                        a.HealthBoost.a + b.HealthBoost.a,
-                        a.HealthBoost.r + b.HealthBoost.r
-                    ),
                     LuckBoost = (a.LuckBoost.a + b.LuckBoost.a, a.LuckBoost.r + b.LuckBoost.r),
                     PerceptionBoost = a.PerceptionBoost + b.PerceptionBoost,
-                    FlatDefenseBoost = (DamageReduce)(a.FlatDefenseBoost + b.FlatDefenseBoost),
-                    PercentageDefenseBoost = (DamageReduce)(
-                        a.PercentageDefenseBoost + b.PercentageDefenseBoost
-                    ),
-                    GoldChange = a.GoldChange + b.GoldChange,
-                    Gold = a.Gold + b.Gold,
+                    Gold = (a.Gold.a + b.Gold.a, a.Gold.d + b.Gold.d),
                     LimitBoost = (ItemLimits)(a.LimitBoost + b.LimitBoost),
+                    Use = a.Use + b.Use,
                 };
+            }
+
+            public static PartialDigbotItem operator *(PartialDigbotItem a, float b)
+            {
+                return new()
+                {
+                    PowerBoost = (a.PowerBoost.a * b, a.PowerBoost.r * b),
+                    LuckBoost = (a.LuckBoost.a * b, a.LuckBoost.r * b),
+                    PerceptionBoost = (int)(a.PerceptionBoost * b),
+                    Gold = (a.Gold.a * b, a.Gold.d * b),
+                    LimitBoost = (ItemLimits)(a.LimitBoost * b),
+                    Use = a.Use,
+                };
+            }
+
+            public static PartialDigbotItem operator *(float a, PartialDigbotItem b)
+            {
+                return b * a;
             }
         }
 
@@ -424,14 +377,11 @@ namespace digbot.Classes
                 Description = description,
                 Type = type,
                 PowerBoost = passiveBoost.PowerBoost,
-                HealthBoost = passiveBoost.HealthBoost,
                 LuckBoost = passiveBoost.LuckBoost,
                 PerceptionBoost = passiveBoost.PerceptionBoost,
-                FlatDefenseBoost = passiveBoost.FlatDefenseBoost,
-                PercentageDefenseBoost = passiveBoost.PercentageDefenseBoost,
                 LimitBoost = passiveBoost.LimitBoost,
-                GoldChange = passiveBoost.GoldChange,
                 Gold = passiveBoost.Gold,
+                Use = passiveBoost.Use,
             };
             DigbotItem equipped = new()
             {
@@ -441,28 +391,29 @@ namespace digbot.Classes
                 Type = type,
                 Time = time ?? 0f,
                 PowerBoost = activeBoost.PowerBoost,
-                HealthBoost = activeBoost.HealthBoost,
                 LuckBoost = activeBoost.LuckBoost,
                 PerceptionBoost = activeBoost.PerceptionBoost,
-                FlatDefenseBoost = activeBoost.FlatDefenseBoost,
-                PercentageDefenseBoost = activeBoost.PercentageDefenseBoost,
                 LimitBoost = activeBoost.LimitBoost,
-                GoldChange = activeBoost.GoldChange,
-                Gold = 0f,
+                Gold = (0f, activeBoost.Gold.d),
+                Use = activeBoost.Use,
             };
-            normal.Use = player =>
+            normal.Use += (player, action) =>
             {
-                if (player.ItemLimits[type.Item1] < typeUse)
+                if (action == ActionType.Equip && player.ItemLimits[type.Item1] >= typeUse)
                 {
-                    return;
+                    player.RemoveItems(normal);
+                    player.AddItems(equipped);
                 }
-                player.RemoveItems(normal);
-                player.AddItems(equipped);
+                return null;
             };
-            equipped.Use = player =>
+            equipped.Use += (player, action) =>
             {
-                player.RemoveItems(equipped);
-                player.AddItems(normal);
+                if (action == ActionType.Equip)
+                {
+                    player.RemoveItems(equipped);
+                    player.AddItems(normal);
+                }
+                return null;
             };
             return (normal, equipped);
         }

@@ -1,7 +1,5 @@
 namespace digbot.Classes
 {
-    public class DamageReduce(float baseValue = 0) : Attributes<DamageType, float>(baseValue) { }
-
     public class ItemLimits(int baseValue = 0) : Attributes<ItemType, int>(baseValue) { }
 
     public abstract class Actor
@@ -28,27 +26,10 @@ namespace digbot.Classes
     public abstract class Entity : Actor
     {
         public required TimeManager TimeManager;
-        private (float a, float r) _maxHealth;
-        public float AbsoluteMaxHealth
-        {
-            get => _maxHealth.a;
-            set => _maxHealth.a = value;
-        }
-        public float RelativeMaxHealth
-        {
-            get => _maxHealth.r;
-            set => _maxHealth.r = value;
-        }
-        public float MaxHealth => AbsoluteMaxHealth * (1 + RelativeMaxHealth);
-        private float _health;
-        public float Health
-        {
-            get => _health;
-            set => _health = Math.Clamp(value, 0, MaxHealth);
-        }
 
         public int Perception = 1;
         private (float a, float r) _luck = (0, 0);
+        private (float current, float loss) _gold = (0f, 0f);
         public float AbsoluteLuck
         {
             get => _luck.a;
@@ -60,35 +41,19 @@ namespace digbot.Classes
             set => _luck.r = value;
         }
         public float Luck => AbsoluteLuck * (1 + RelativeLuck);
-
-        private (float a, float r) _gold = (0f, 0f);
-
         public float Gold
         {
-            get => _gold.a;
-            set => _gold.a = value;
+            get => _gold.current;
+            set => _gold.current = value;
         }
-        public float RelativeGold
+
+        public float GoldDrop
         {
-            get => _gold.r;
-            set => _gold.r = value;
+            get => _gold.loss;
+            set => _gold.loss = value;
         }
 
-        protected Entity(float maxHealth = 100f)
-        {
-            AbsoluteMaxHealth = maxHealth;
-            Health = maxHealth;
-
-            FlatDefense = new() { };
-
-            PercentageDefense = new() { };
-
-            ItemLimits = new() { };
-        }
-
-        public ItemLimits ItemLimits { get; private set; }
-        public DamageReduce FlatDefense { get; private set; }
-        public DamageReduce PercentageDefense { get; private set; }
+        public ItemLimits ItemLimits { get; private set; } = new();
         private readonly Dictionary<DigbotItem, int> _inventory = [];
         public IReadOnlyDictionary<DigbotItem, int> Inventory => _inventory.AsReadOnly();
 
@@ -104,20 +69,14 @@ namespace digbot.Classes
             {
                 _inventory[item] = amount;
             }
-            FlatDefense = (DamageReduce)(FlatDefense + item.FlatDefenseBoost * amount);
-            PercentageDefense = (DamageReduce)(
-                PercentageDefense + item.PercentageDefenseBoost * amount
-            );
             ItemLimits = (ItemLimits)(ItemLimits + item.LimitBoost * amount);
             ItemLimits[item.Type.Item1] -= item.TypeUse * amount;
             AbsolutePower += item.PowerBoost.a * amount;
             RelativePower += item.PowerBoost.r * amount;
-            AbsoluteMaxHealth += item.HealthBoost.a * amount;
-            RelativeMaxHealth += item.HealthBoost.r * amount;
             AbsoluteLuck += item.LuckBoost.a * amount;
             RelativeLuck += item.LuckBoost.r * amount;
             Perception += item.PerceptionBoost * amount;
-            RelativeGold += item.GoldChange * amount;
+            GoldDrop += item.Gold.d * amount;
             if (item.Time > 0)
             {
                 TimeManager.AddTimer(item, this, item.Time);
@@ -139,39 +98,14 @@ namespace digbot.Classes
             {
                 _inventory[item] -= amount;
             }
-            FlatDefense = (DamageReduce)(FlatDefense - item.FlatDefenseBoost * amount);
-            PercentageDefense = (DamageReduce)(
-                PercentageDefense - item.PercentageDefenseBoost * amount
-            );
             ItemLimits = (ItemLimits)(ItemLimits - item.LimitBoost * amount);
             ItemLimits[item.Type.Item1] += item.TypeUse * amount;
             AbsolutePower -= item.PowerBoost.a * amount;
             RelativePower -= item.PowerBoost.r * amount;
-            AbsoluteMaxHealth -= item.HealthBoost.a * amount;
-            RelativeMaxHealth -= item.HealthBoost.r * amount;
             AbsoluteLuck -= item.LuckBoost.a * amount;
             RelativeLuck -= item.LuckBoost.r * amount;
             Perception -= item.PerceptionBoost * amount;
-            RelativeGold -= item.GoldChange * amount;
-        }
-
-        public void TakeDamage(float damage, DamageType type)
-        {
-            float flatDefense = FlatDefense[type];
-            float ModifiedDamage;
-            if (flatDefense + 1 < damage)
-            {
-                ModifiedDamage = damage - flatDefense;
-            }
-            else if (damage > 1)
-            {
-                ModifiedDamage = 1 / (flatDefense - damage + 2);
-            }
-            else
-            {
-                ModifiedDamage = 1 / (flatDefense + 1);
-            }
-            Health -= ModifiedDamage * (1 - PercentageDefense[type]);
+            GoldDrop -= item.Gold.d * amount;
         }
     }
 
