@@ -52,7 +52,19 @@ Dictionary<string, DigbotCommand> lobbyCommands =
 
     playerManager.OnPlayerJoined += (_, player) =>
     {
-        if (players.ContainsKey(player.Username)) { }
+        if (players.TryGetValue(player.Username, out var playerObj))
+        {
+            if (playerObj.Banned)
+            {
+                client.Send(
+                    new PlayerChatPacket()
+                    {
+                        Message = $"/kick {player.Username} You're still banned",
+                    }
+                );
+                client.Send(new PlayerChatPacket() { Message = $"/unkick {player.Username}" });
+            }
+        }
         else
         {
             if (SetRoles.TryGetValue(player.Username.ToUpper(), out var role))
@@ -79,13 +91,6 @@ Dictionary<string, DigbotCommand> lobbyCommands =
                     }
                 );
             }
-        }
-        if (players[player.Username].Banned)
-        {
-            client.Send(
-                new PlayerChatPacket() { Message = $"/kick {player.Username} You're still banned" }
-            );
-            client.Send(new PlayerChatPacket() { Message = $"/unkick {player.Username}" });
         }
     };
 
