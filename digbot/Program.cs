@@ -32,9 +32,15 @@ Registry.Initialize();
 var TimeManager = new TimeManager();
 
 string lobbyId = "rc720d56548cfa1";
-Dictionary<string, DigbotCommand> lobbyCommands =
-    (Dictionary<string, DigbotCommand>)
-        Registry.Commands.Where(command => command.Value.LobbyCommand);
+Dictionary<string, DigbotCommand> lobbyCommands = [];
+
+foreach (var command in Registry.Commands)
+{
+    if (command.Value.LobbyCommand)
+    {
+        lobbyCommands.Add(command.Key, command.Value);
+    }
+}
 
 (PixelPilotClient, string joinKey) SetupWorld()
 {
@@ -52,46 +58,33 @@ Dictionary<string, DigbotCommand> lobbyCommands =
 
     playerManager.OnPlayerJoined += (_, player) =>
     {
-        if (players.TryGetValue(player.Username, out var playerObj))
+        if (players.ContainsKey(player.Username)) { }
+        else if (SetRoles.TryGetValue(player.Username.ToUpper(), out var role))
         {
-            if (playerObj.Banned)
-            {
-                client.Send(
-                    new PlayerChatPacket()
-                    {
-                        Message = $"/kick {player.Username} You're still banned",
-                    }
-                );
-                client.Send(new PlayerChatPacket() { Message = $"/unkick {player.Username}" });
-            }
+            players.Add(
+                player.Username,
+                new DigbotPlayer()
+                {
+                    Username = player.Username,
+                    Role = role,
+                    TimeManager = TimeManager,
+                }
+            );
         }
         else
         {
-            if (SetRoles.TryGetValue(player.Username.ToUpper(), out var role))
-            {
-                players.Add(
-                    player.Username,
-                    new DigbotPlayer()
-                    {
-                        Username = player.Username,
-                        Role = role,
-                        TimeManager = TimeManager,
-                    }
-                );
-            }
-            else
-            {
-                players.Add(
-                    player.Username,
-                    new DigbotPlayer()
-                    {
-                        Role = DigbotPlayerRole.None,
-                        Username = player.Username,
-                        TimeManager = TimeManager,
-                    }
-                );
-            }
+            players.Add(
+                player.Username,
+                new DigbotPlayer()
+                {
+                    Role = DigbotPlayerRole.None,
+                    Username = player.Username,
+                    TimeManager = TimeManager,
+                }
+            );
         }
+        Console.WriteLine($"Player {player.Username} joined");
+        Console.WriteLine($"Players: {players.Count}");
     };
 
     client.OnPacketReceived += (_, packet) =>
@@ -117,17 +110,35 @@ Dictionary<string, DigbotCommand> lobbyCommands =
 
                 if (args.Length < 1)
                     return;
+                Console.WriteLine(args[0]);
+                Console.WriteLine(playerObj.Role);
 
                 if (lobbyCommands.TryGetValue(args[0].ToLower(), out var command))
                 {
-                    command.LobbyExecute(args[1..], playerObj, client);
+                    Console.WriteLine("Command found");
+                    if (command.Roles.Contains(playerObj.Role))
+                    {
+                        command.LobbyExecute(args[1..], playerObj, client);
+                    }
+                    else
+                    {
+                        client.Send(
+                            new PlayerChatPacket()
+                            {
+                                Message =
+                                    $"/dm {player.Username} That command can't be used in this world or you don't have permission",
+                            }
+                        );
+                    }
                 }
                 else
                 {
+                    Console.WriteLine("Command not found");
                     client.Send(
                         new PlayerChatPacket()
                         {
-                            Message = $"/dm ${player.Id} That command can't be used in this world",
+                            Message =
+                                $"/dm {player.Username} That command can't be used in this world or you don't have permission",
                         }
                     );
                 }
@@ -184,13 +195,8 @@ Dictionary<string, DigbotCommand> lobbyCommands =
                 );
             }
         }
-        if (players[player.Username].Banned)
-        {
-            client.Send(
-                new PlayerChatPacket() { Message = $"/kick {player.Username} You're still banned" }
-            );
-            client.Send(new PlayerChatPacket() { Message = $"/unkick {player.Username}" });
-        }
+        Console.WriteLine($"Player {player.Username} joined");
+        Console.WriteLine($"Players: {players.Count}");
     };
 
     client.OnClientConnected += (_) =>
@@ -249,6 +255,8 @@ Dictionary<string, DigbotCommand> lobbyCommands =
             return;
 
         DigbotPlayer playerObj = players[player.Username];
+        int x;
+        int y;
 
         switch (packet)
         {
@@ -264,34 +272,49 @@ Dictionary<string, DigbotCommand> lobbyCommands =
 
                 if (worldTemplate.Commands.TryGetValue(args[0].ToLower(), out var command))
                 {
-                    command.Execute(args[1..], playerObj, client, worldTemplate, random);
+                    if (command.Roles.Contains(playerObj.Role))
+                    {
+                        command.Execute(args[1..], playerObj, client, worldTemplate, random);
+                    }
+                    else
+                    {
+                        client.Send(
+                            new PlayerChatPacket()
+                            {
+                                Message =
+                                    $"/dm {player.Username} That command can't be used in this world or you don't have permission",
+                            }
+                        );
+                    }
                 }
                 else
                 {
                     client.Send(
                         new PlayerChatPacket()
                         {
-                            Message = $"/dm ${player.Id} That command can't be used in this world",
+                            Message =
+                                $"/dm {player.Username} That command can't be used in this world or you don't have permission",
                         }
                     );
                 }
                 break;
 
             case PlayerMovedPacket movedPacket:
-                int x = (int)((movedPacket.Position.X / 16.0) + 0.5);
-                int y = (int)((movedPacket.Position.Y / 16.0) + 0.5);
+                x = (int)((movedPacket.Position.X / 16.0) + 0.5);
+                y = (int)((movedPacket.Position.Y / 16.0) + 0.5);
                 if (y < worldTemplate.AirHeight - 1 || !worldTemplate.Breaking)
                     return;
-                if (
-                    movedPacket.SpaceJustDown
-                    && Math.Abs(movedPacket.Horizontal + movedPacket.Vertical) == 1
-                )
+                bool bothAreZero = movedPacket.Horizontal == 0 && movedPacket.Vertical == 0;
+                bool bothAreNonZero = movedPacket.Horizontal != 0 && movedPacket.Vertical != 0;
+                bool atLeastOneIsZero = movedPacket.Horizontal == 0 || movedPacket.Vertical == 0;
+                bool atLeastOneIsNonZero = movedPacket.Horizontal != 0 || movedPacket.Vertical != 0;
+                if (movedPacket.SpaceJustDown && atLeastOneIsZero)
                 {
                     if (movedPacket.Horizontal != 0)
                     {
                         x += movedPacket.Horizontal;
                     }
-                    else
+                    else if (movedPacket.Vertical != 0)
                     {
                         y += movedPacket.Vertical;
                     }
@@ -300,7 +323,8 @@ Dictionary<string, DigbotCommand> lobbyCommands =
                         return;
                     if (
                         worldTemplate.GetBlock(x, y - worldTemplate.AirHeight).type
-                        == PixelBlock.Empty
+                            == PixelBlock.Empty
+                        && atLeastOneIsNonZero
                     )
                         return;
                     if (
@@ -330,41 +354,45 @@ Dictionary<string, DigbotCommand> lobbyCommands =
                         );
                     }
 
-                    (int, int)[] offsets = ranges()[playerObj.Perception];
-
-                    foreach (var (dx, dy) in offsets)
+                    if (atLeastOneIsNonZero)
                     {
-                        int newX = x + dx;
-                        int newY = y + dy;
-                        if (!worldTemplate.Inside(newX, newY - worldTemplate.AirHeight))
-                            continue;
-                        if (
-                            worldTemplate.GetBlock(newX, newY - worldTemplate.AirHeight).type
-                            != PixelBlock.GenericBlackTransparent
-                        )
-                            continue;
-                        var list = worldTemplate.Blocks.Where(block =>
-                            block.condition(playerObj, (x, y))
-                        );
-                        int randomWeight = random.Next(list.Sum(block => block.weight));
-                        var block = list.First(block => (randomWeight -= block.weight) < 0).block;
-                        worldTemplate.ActBlock(
-                            ActionType.Reveal,
-                            playerObj,
-                            newX,
-                            newY - worldTemplate.AirHeight,
-                            block
-                        );
-                        blockList.Add(
-                            new PlacedBlock(
-                                newX,
-                                newY,
-                                WorldLayer.Foreground,
-                                new BasicBlock(block)
-                            )
-                        );
-                    }
+                        (int, int)[] offsets = ranges()[playerObj.Perception];
 
+                        foreach (var (dx, dy) in offsets)
+                        {
+                            int newX = x + dx;
+                            int newY = y + dy;
+                            if (!worldTemplate.Inside(newX, newY - worldTemplate.AirHeight))
+                                continue;
+                            if (
+                                worldTemplate.GetBlock(newX, newY - worldTemplate.AirHeight).type
+                                != PixelBlock.GenericBlackTransparent
+                            )
+                                continue;
+                            var list = worldTemplate.Blocks.Where(block =>
+                                block.condition(playerObj, (x, y))
+                            );
+                            int randomWeight = random.Next(list.Sum(block => block.weight));
+                            var block = list.First(block =>
+                                (randomWeight -= block.weight) < 0
+                            ).block;
+                            worldTemplate.ActBlock(
+                                ActionType.Reveal,
+                                playerObj,
+                                newX,
+                                newY - worldTemplate.AirHeight,
+                                block
+                            );
+                            blockList.Add(
+                                new PlacedBlock(
+                                    newX,
+                                    newY,
+                                    WorldLayer.Foreground,
+                                    new BasicBlock(block)
+                                )
+                            );
+                        }
+                    }
                     Task.Run(async () =>
                     {
                         await Task.Delay(100);
@@ -372,6 +400,7 @@ Dictionary<string, DigbotCommand> lobbyCommands =
                     });
                 }
                 break;
+
             default:
                 break;
         }

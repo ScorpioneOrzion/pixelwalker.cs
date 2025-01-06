@@ -50,7 +50,10 @@ namespace digbot.Classes
                                 return;
                             }
                             var commands = Commands
-                                .Where(command => command.Value.Roles.Contains(player.Role))
+                                .Where(command =>
+                                    command.Value.Roles.Contains(player.Role)
+                                    && command.Value.LobbyCommand
+                                )
                                 .Select(command => command.Key);
                             var commandsList = string.Join(", ", commands);
                             lobby.Send(
@@ -84,7 +87,141 @@ namespace digbot.Classes
                 "use",
                 new()
                 {
-                    Execute = (args, player, client, world, random) => { },
+                    Execute = (args, player, client, world, random) =>
+                    {
+                        if (player is DigbotPlayer playerEntity)
+                        {
+                            var result = playerEntity
+                                .Inventory.Where(Items => Items.Key.Name == args[0])
+                                .First()
+                                .Key.Use(playerEntity, ActionType.Use);
+
+                            if (result != null)
+                            {
+                                // do stuff with result
+                            }
+                        }
+                    },
+                    Roles =
+                    [
+                        DigbotPlayerRole.Owner,
+                        DigbotPlayerRole.Immune,
+                        DigbotPlayerRole.None,
+                    ],
+                }
+            },
+            {
+                "equip",
+                new()
+                {
+                    Execute = (args, player, client, world, random) =>
+                    {
+                        if (player is Entity entity)
+                        {
+                            entity
+                                .Inventory.Where(Items => Items.Key.Name == args[0])
+                                .First()
+                                .Key.Use(entity, ActionType.Equip);
+                        }
+                    },
+                    Roles =
+                    [
+                        DigbotPlayerRole.Owner,
+                        DigbotPlayerRole.Immune,
+                        DigbotPlayerRole.None,
+                    ],
+                }
+            },
+            {
+                "buy",
+                new()
+                {
+                    Execute = (args, player, client, world, random) =>
+                    {
+                        if (player is DigbotPlayer playerEntity)
+                        {
+                            if (Items is null)
+                            {
+                                return;
+                            }
+                            if (Items.TryGetValue(args[0], out DigbotItem? item))
+                            {
+                                if (args.Length == 1)
+                                {
+                                    item.Buy(playerEntity);
+                                }
+                                else
+                                {
+                                    item.Buy(playerEntity, args[1]);
+                                }
+                            }
+                            else
+                            {
+                                client.Send(
+                                    new PlayerChatPacket()
+                                    {
+                                        Message = $"/dm {player.Username} Unknown item",
+                                    }
+                                );
+                            }
+                        }
+                    },
+                    Roles =
+                    [
+                        DigbotPlayerRole.Owner,
+                        DigbotPlayerRole.Immune,
+                        DigbotPlayerRole.None,
+                    ],
+                }
+            },
+            {
+                "sell",
+                new()
+                {
+                    Execute = (args, player, client, world, random) =>
+                    {
+                        if (player is DigbotPlayer playerEntity)
+                        {
+                            if (Items is null)
+                            {
+                                return;
+                            }
+                            DigbotItem? item = Items[args[0]];
+                            if (item is not null)
+                            {
+                                if (playerEntity.Inventory.ContainsKey(item))
+                                {
+                                    if (args.Length == 1)
+                                    {
+                                        item.Sell(playerEntity);
+                                    }
+                                    else
+                                    {
+                                        item.Sell(playerEntity, args[1]);
+                                    }
+                                }
+                                else
+                                {
+                                    client.Send(
+                                        new PlayerChatPacket()
+                                        {
+                                            Message =
+                                                $"/dm {player.Username} You don't have that item",
+                                        }
+                                    );
+                                }
+                            }
+                            else
+                            {
+                                client.Send(
+                                    new PlayerChatPacket()
+                                    {
+                                        Message = $"/dm {player.Username} Unknown item",
+                                    }
+                                );
+                            }
+                        }
+                    },
                     Roles =
                     [
                         DigbotPlayerRole.Owner,
@@ -234,6 +371,28 @@ namespace digbot.Classes
                 "StaticPerception",
                 new HiddenDigbotItem() { PerceptionBoost = 1 }
             },
+            {
+                "SmallExplosion",
+                new DigbotItem()
+                {
+                    Name = "Small Explosion",
+                    Description = "A small explosion",
+                    Type = (ItemType.Tool, ActionType.Explode),
+                    Use = (player, action) =>
+                    {
+                        if (Items is null)
+                        {
+                            return null;
+                        }
+                        if (action == ActionType.Use)
+                        {
+                            player.RemoveItems(Items["SmallExplosion"]);
+                            return [(1f, ActionType.Explode)];
+                        }
+                        return null;
+                    },
+                }
+            },
         };
         public static readonly CaseInsensitiveDictionary<(
             DigbotItem Normal,
@@ -244,11 +403,11 @@ namespace digbot.Classes
         {
             EquippedItems.Add(
                 "starterPickaxe",
-                GenerateTool(
+                GenerateEquipment(
                     "Starter Pickaxe",
                     "A basic pickaxe",
                     1,
-                    (ItemType.Tool, ActionType.Drill),
+                    (ItemType.Tool, ActionType.Mine),
                     null,
                     new() { PowerBoost = (1f, 0) },
                     null
@@ -257,13 +416,39 @@ namespace digbot.Classes
 
             EquippedItems.Add(
                 "starterDrill",
-                GenerateTool(
+                GenerateEquipment(
                     "Starter Drill",
                     "A basic drill",
                     1,
-                    (ItemType.Tool, ActionType.Drill),
+                    (ItemType.Tool, ActionType.Mine),
                     null,
                     new() { PowerBoost = (2f, 0) },
+                    null
+                )
+            );
+
+            EquippedItems.Add(
+                "advancedPickaxe",
+                GenerateEquipment(
+                    "Advanced Pickaxe",
+                    "An advanced pickaxe",
+                    1,
+                    (ItemType.Tool, ActionType.Mine),
+                    null,
+                    new() { PowerBoost = (2f, 0) },
+                    null
+                )
+            );
+
+            EquippedItems.Add(
+                "advancedDrill",
+                GenerateEquipment(
+                    "Advanced Drill",
+                    "An advanced drill",
+                    1,
+                    (ItemType.Tool, ActionType.Mine),
+                    null,
+                    new() { PowerBoost = (4f, 0) },
                     null
                 )
             );
@@ -287,8 +472,9 @@ namespace digbot.Classes
                     $"{oreNames[i]}Ore",
                     new()
                     {
-                        Name = $"{oreNames[i][..1].ToUpper()}{oreNames[i][1..]} Ore",
+                        Name = $"{Capitalize(oreNames[i])} Ore",
                         Description = $"A chunk of {oreNames[i]} ore",
+                        Gold = (5f, 0f),
                     }
                 );
 
@@ -297,45 +483,15 @@ namespace digbot.Classes
                     $"{oreNames[i]}Ingot",
                     new()
                     {
-                        Name = $"{oreNames[i][..1].ToUpper()}{oreNames[i][1..]} Ingot",
+                        Name = $"{Capitalize(oreNames[i])} Ingot",
                         Description = $"A bar of {oreNames[i]} ingot",
+                        Gold = (10f, 0f),
                     }
                 );
-
-                // Pickaxe
-                EquippedItems.Add(
-                    $"{oreNames[i]}Pickaxe",
-                    GenerateTool(
-                        $"{oreNames[i][..1].ToUpper()}{oreNames[i][1..]} Pickaxe",
-                        $"A pickaxe made of {oreNames[i]}",
-                        1,
-                        (ItemType.Tool, ActionType.Mine),
-                        null,
-                        new() { PowerBoost = (5f, 0) },
-                        null
-                    )
-                );
-
-                // Drill
-                EquippedItems.Add(
-                    $"{oreNames[i]}Drill",
-                    GenerateTool(
-                        $"{oreNames[i][..1].ToUpper()}{oreNames[i][1..]} Drill",
-                        $"A drill made of {oreNames[i]}",
-                        1,
-                        (ItemType.Tool, ActionType.Drill),
-                        null,
-                        new() { PowerBoost = (10f, 0) },
-                        null
-                    )
-                );
-
-                // ore should cost 5
-                Items[$"{oreNames[i]}Ore"].Gold.a = 5f;
-                // ingot should cost 10
-                Items[$"{oreNames[i]}Ingot"].Gold.a = 10f;
             }
         }
+
+        private static string Capitalize(string str) => $"{str[..1].ToUpper()}{str[1..]}";
 
         public class PartialDigbotItem
         {
@@ -357,7 +513,7 @@ namespace digbot.Classes
                     LuckBoost = (a.LuckBoost.a + b.LuckBoost.a, a.LuckBoost.r + b.LuckBoost.r),
                     PerceptionBoost = a.PerceptionBoost + b.PerceptionBoost,
                     Gold = (a.Gold.a + b.Gold.a, a.Gold.d + b.Gold.d),
-                    LimitBoost = (ItemLimits)(a.LimitBoost + b.LimitBoost),
+                    LimitBoost = a.LimitBoost + b.LimitBoost,
                     Use = a.Use + b.Use,
                 };
             }
@@ -381,7 +537,7 @@ namespace digbot.Classes
             }
         }
 
-        public static (DigbotItem Normal, DigbotItem Equipped) GenerateTool(
+        public static (DigbotItem Normal, DigbotItem Equipped) GenerateEquipment(
             string name,
             string description,
             int typeUse,

@@ -14,7 +14,6 @@ namespace digbot.Classes
         Use,
         AutoUse,
         Mine,
-        Drill,
         Explode,
         Electrify,
         Transform,
