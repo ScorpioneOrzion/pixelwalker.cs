@@ -181,63 +181,71 @@ namespace digbot.Classes
         private readonly Dictionary<DigbotItem, int> _inventory = [];
         public IReadOnlyDictionary<DigbotItem, int> Inventory => _inventory.AsReadOnly();
 
+        private void ApplyItemEffects(DigbotItem item, int multiplier)
+        {
+            AbsolutePower += item.PowerBoost.a * multiplier;
+            RelativePower += item.PowerBoost.r * multiplier;
+            AbsoluteLuck += item.LuckBoost.a * multiplier;
+            RelativeLuck += item.LuckBoost.r * multiplier;
+            Perception += item.PerceptionBoost * multiplier;
+            GoldDrop += item.Gold.d * multiplier;
+            UpdateItemLimits(item, multiplier);
+        }
+
+        private void UpdateItemLimits(DigbotItem item, int amount)
+        {
+            ItemLimits = (ItemLimits)(ItemLimits + item.LimitBoost * amount);
+            ItemLimits[item.Type.Item1] -= item.TypeUse * amount;
+        }
+
         public void AddItems(DigbotItem item, int amount = 1)
         {
             if (amount <= 0)
                 return;
+
             if (_inventory.ContainsKey(item))
-            {
                 _inventory[item] += amount;
-            }
             else
-            {
                 _inventory[item] = amount;
-            }
-            ItemLimits = (ItemLimits)(ItemLimits + item.LimitBoost * amount);
-            ItemLimits[item.Type.Item1] -= item.TypeUse * amount;
-            AbsolutePower += item.PowerBoost.a * amount;
-            RelativePower += item.PowerBoost.r * amount;
-            AbsoluteLuck += item.LuckBoost.a * amount;
-            RelativeLuck += item.LuckBoost.r * amount;
-            Perception += item.PerceptionBoost * amount;
-            GoldDrop += item.Gold.d * amount;
+
+            ApplyItemEffects(item, amount);
+
             if (item.Time > 0)
-            {
                 TimeManager.AddTimer(item, this, item.Time);
-            }
         }
 
         public void RemoveItems(DigbotItem item, int amount = 1)
         {
-            if (amount <= 0)
+            if (amount <= 0 || !_inventory.TryGetValue(item, out int currentAmount))
                 return;
-            if (!_inventory.TryGetValue(item, out int SetAmount))
-                return;
-            if (amount >= SetAmount)
+
+            if (amount >= currentAmount)
             {
-                amount = SetAmount;
                 _inventory.Remove(item);
+                amount = currentAmount;
             }
             else
             {
                 _inventory[item] -= amount;
             }
-            ItemLimits = (ItemLimits)(ItemLimits - item.LimitBoost * amount);
-            ItemLimits[item.Type.Item1] += item.TypeUse * amount;
-            AbsolutePower -= item.PowerBoost.a * amount;
-            RelativePower -= item.PowerBoost.r * amount;
-            AbsoluteLuck -= item.LuckBoost.a * amount;
-            RelativeLuck -= item.LuckBoost.r * amount;
-            Perception -= item.PerceptionBoost * amount;
-            GoldDrop -= item.Gold.d * amount;
+
+            ApplyItemEffects(item, -amount);
         }
     }
 
     public class DigbotPlayer : Entity
     {
-        public DigbotPlayer()
+        public Random RandomGenerator { get; private set; }
+
+        public DigbotPlayer(float initialPower = 1)
         {
-            AbsolutePower = 1;
+            AbsolutePower = initialPower;
+            RandomGenerator = new Random((int)DateTime.Now.Ticks ^ this.GetHashCode());
+        }
+
+        public int GetRandomInt(int min, int max)
+        {
+            return RandomGenerator.Next(min, max);
         }
 
         public required DigbotPlayerRole Role;

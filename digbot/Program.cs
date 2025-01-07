@@ -14,6 +14,7 @@ DotEnv.Load(options: new DotEnvOptions(envFilePaths: ["../.env"]));
 
 string email = Environment.GetEnvironmentVariable("DIGBOT_EMAIL")!;
 string password = Environment.GetEnvironmentVariable("DIGBOT_PASS")!;
+string lobbyId = "rc720d56548cfa1";
 
 Dictionary<string, DigbotPlayerRole> SetRoles = new()
 {
@@ -31,7 +32,11 @@ var players = new Dictionary<string, DigbotPlayer> { };
 Registry.Initialize();
 var TimeManager = new TimeManager();
 
-string lobbyId = "rc720d56548cfa1";
+Action<PixelPilotClient, string, int> SendPrivateMessage = (client, message, playerId) =>
+{
+    client.Send(new PlayerDirectMessagePacket() { Message = message, TargetPlayerId = playerId });
+};
+
 Dictionary<string, DigbotCommand> lobbyCommands = [];
 
 foreach (var command in Registry.Commands)
@@ -50,8 +55,6 @@ foreach (var command in Registry.Commands)
         .SetPassword(password)
         .SetAutomaticReconnect(false)
         .Build();
-
-    var random = new Random();
 
     var playerManager = new PlayerManager();
     client.OnPacketReceived += playerManager.HandlePacket;
@@ -83,14 +86,12 @@ foreach (var command in Registry.Commands)
                 }
             );
         }
-        Console.WriteLine($"Player {player.Username} joined");
-        Console.WriteLine($"Players: {players.Count}");
     };
 
     client.OnPacketReceived += (_, packet) =>
     {
         var playerId = packet.GetPlayerId();
-        if (playerId == null)
+        if (!playerId.HasValue)
             return;
 
         var player = playerManager.GetPlayer(playerId.Value);
@@ -118,28 +119,24 @@ foreach (var command in Registry.Commands)
                     Console.WriteLine("Command found");
                     if (command.Roles.Contains(playerObj.Role))
                     {
-                        command.LobbyExecute(args[1..], playerObj, client);
+                        command.LobbyExecute(args[1..], playerObj, playerId.Value, client);
                     }
                     else
                     {
-                        client.Send(
-                            new PlayerChatPacket()
-                            {
-                                Message =
-                                    $"/dm {player.Username} That command can't be used in this world or you don't have permission",
-                            }
+                        SendPrivateMessage(
+                            client,
+                            "That command can't be used in this world or you don't have permission",
+                            playerId.Value
                         );
                     }
                 }
                 else
                 {
                     Console.WriteLine("Command not found");
-                    client.Send(
-                        new PlayerChatPacket()
-                        {
-                            Message =
-                                $"/dm {player.Username} That command can't be used in this world or you don't have permission",
-                        }
+                    SendPrivateMessage(
+                        client,
+                        "That command can't be used in this world or you don't have permission",
+                        playerId.Value
                     );
                 }
                 break;
@@ -195,8 +192,6 @@ foreach (var command in Registry.Commands)
                 );
             }
         }
-        Console.WriteLine($"Player {player.Username} joined");
-        Console.WriteLine($"Players: {players.Count}");
     };
 
     client.OnClientConnected += (_) =>
@@ -247,7 +242,7 @@ foreach (var command in Registry.Commands)
     client.OnPacketReceived += (_, packet) =>
     {
         var playerId = packet.GetPlayerId();
-        if (playerId == null)
+        if (!playerId.HasValue)
             return;
 
         var player = playerManager.GetPlayer(playerId.Value);
@@ -274,27 +269,29 @@ foreach (var command in Registry.Commands)
                 {
                     if (command.Roles.Contains(playerObj.Role))
                     {
-                        command.Execute(args[1..], playerObj, client, worldTemplate, random);
+                        command.Execute(
+                            args[1..],
+                            playerObj,
+                            playerId.Value,
+                            client,
+                            worldTemplate
+                        );
                     }
                     else
                     {
-                        client.Send(
-                            new PlayerChatPacket()
-                            {
-                                Message =
-                                    $"/dm {player.Username} That command can't be used in this world or you don't have permission",
-                            }
+                        SendPrivateMessage(
+                            client,
+                            "That command can't be used in this world or you don't have permission",
+                            playerId.Value
                         );
                     }
                 }
                 else
                 {
-                    client.Send(
-                        new PlayerChatPacket()
-                        {
-                            Message =
-                                $"/dm {player.Username} That command can't be used in this world or you don't have permission",
-                        }
+                    SendPrivateMessage(
+                        client,
+                        "That command can't be used in this world or you don't have permission",
+                        playerId.Value
                     );
                 }
                 break;

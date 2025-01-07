@@ -1,3 +1,4 @@
+using PixelPilot.Client;
 using PixelPilot.Client.World.Constants;
 using PixelWalker.Networking.Protobuf.WorldPackets;
 
@@ -5,13 +6,23 @@ namespace digbot.Classes
 {
     public class Registry
     {
+        private static readonly Action<PixelPilotClient, string, int> SendDirectMessage = static (
+            client,
+            message,
+            playerId
+        ) =>
+        {
+            client.Send(
+                new PlayerDirectMessagePacket() { Message = message, TargetPlayerId = playerId }
+            );
+        };
         public static readonly CaseInsensitiveDictionary<DigbotCommand> Commands = new()
         {
             {
                 "reset",
                 new()
                 {
-                    Execute = (args, player, client, world, random) =>
+                    Execute = (args, player, playerId, client, world) =>
                     {
                         world.Reset(client);
                     },
@@ -22,7 +33,7 @@ namespace digbot.Classes
                 "help",
                 new()
                 {
-                    Execute = (args, player, client, world, random) =>
+                    Execute = (args, player, playerId, client, world) =>
                     {
                         if (args.Length == 0)
                         {
@@ -32,16 +43,11 @@ namespace digbot.Classes
                                 )
                                 .Select(command => command.Key);
                             var commandsList = string.Join(", ", commands);
-                            client.Send(
-                                new PlayerChatPacket()
-                                {
-                                    Message = $"/dm {player.Username} {commandsList}",
-                                }
-                            );
+                            SendDirectMessage(client, commandsList, playerId);
                         }
                     },
                     LobbyCommand = true,
-                    LobbyExecute = (args, player, lobby) =>
+                    LobbyExecute = (args, player, playerId, lobby) =>
                     {
                         if (args.Length == 0)
                         {
@@ -56,27 +62,16 @@ namespace digbot.Classes
                                 )
                                 .Select(command => command.Key);
                             var commandsList = string.Join(", ", commands);
-                            lobby.Send(
-                                new PlayerChatPacket()
-                                {
-                                    Message = $"/dm {player.Username} {commandsList}",
-                                }
-                            );
+                            SendDirectMessage(lobby, commandsList, playerId);
                         }
                     },
-                    Roles =
-                    [
-                        DigbotPlayerRole.Owner,
-                        DigbotPlayerRole.Immune,
-                        DigbotPlayerRole.None,
-                    ],
                 }
             },
             {
                 "exit",
                 new()
                 {
-                    Execute = (args, player, client, world, random) =>
+                    Execute = (args, player, playerId, client, world) =>
                     {
                         client.Disconnect();
                     },
@@ -87,7 +82,7 @@ namespace digbot.Classes
                 "use",
                 new()
                 {
-                    Execute = (args, player, client, world, random) =>
+                    Execute = (args, player, playerId, client, world) =>
                     {
                         if (player is DigbotPlayer playerEntity)
                         {
@@ -102,19 +97,13 @@ namespace digbot.Classes
                             }
                         }
                     },
-                    Roles =
-                    [
-                        DigbotPlayerRole.Owner,
-                        DigbotPlayerRole.Immune,
-                        DigbotPlayerRole.None,
-                    ],
                 }
             },
             {
                 "equip",
                 new()
                 {
-                    Execute = (args, player, client, world, random) =>
+                    Execute = (args, player, playerId, client, world) =>
                     {
                         if (player is Entity entity)
                         {
@@ -124,19 +113,13 @@ namespace digbot.Classes
                                 .Key.Use(entity, ActionType.Equip);
                         }
                     },
-                    Roles =
-                    [
-                        DigbotPlayerRole.Owner,
-                        DigbotPlayerRole.Immune,
-                        DigbotPlayerRole.None,
-                    ],
                 }
             },
             {
                 "buy",
                 new()
                 {
-                    Execute = (args, player, client, world, random) =>
+                    Execute = (args, player, playerId, client, world) =>
                     {
                         if (player is DigbotPlayer playerEntity)
                         {
@@ -144,8 +127,19 @@ namespace digbot.Classes
                             {
                                 return;
                             }
-                            if (Items.TryGetValue(args[0], out DigbotItem? item))
+                            DigbotItem? item = Items[args[0]];
+                            if (item is not null)
                             {
+                                if (item.Gold.a == 0f)
+                                {
+                                    SendDirectMessage(client, "You can't buy that item", playerId);
+                                    return;
+                                }
+                                if (item.Hidden)
+                                {
+                                    SendDirectMessage(client, "Unknown item", playerId);
+                                    return;
+                                }
                                 if (args.Length == 1)
                                 {
                                     item.Buy(playerEntity);
@@ -157,28 +151,17 @@ namespace digbot.Classes
                             }
                             else
                             {
-                                client.Send(
-                                    new PlayerChatPacket()
-                                    {
-                                        Message = $"/dm {player.Username} Unknown item",
-                                    }
-                                );
+                                SendDirectMessage(client, "Unknown item", playerId);
                             }
                         }
                     },
-                    Roles =
-                    [
-                        DigbotPlayerRole.Owner,
-                        DigbotPlayerRole.Immune,
-                        DigbotPlayerRole.None,
-                    ],
                 }
             },
             {
                 "sell",
                 new()
                 {
-                    Execute = (args, player, client, world, random) =>
+                    Execute = (args, player, playerId, client, world) =>
                     {
                         if (player is DigbotPlayer playerEntity)
                         {
@@ -189,6 +172,16 @@ namespace digbot.Classes
                             DigbotItem? item = Items[args[0]];
                             if (item is not null)
                             {
+                                if (item.Gold.a == 0f)
+                                {
+                                    SendDirectMessage(client, "You can't sell that item", playerId);
+                                    return;
+                                }
+                                if (item.Hidden)
+                                {
+                                    SendDirectMessage(client, "Unknown item", playerId);
+                                    return;
+                                }
                                 if (playerEntity.Inventory.ContainsKey(item))
                                 {
                                     if (args.Length == 1)
@@ -202,46 +195,20 @@ namespace digbot.Classes
                                 }
                                 else
                                 {
-                                    client.Send(
-                                        new PlayerChatPacket()
-                                        {
-                                            Message =
-                                                $"/dm {player.Username} You don't have that item",
-                                        }
-                                    );
+                                    SendDirectMessage(client, "You don't have that item", playerId);
                                 }
                             }
                             else
                             {
-                                client.Send(
-                                    new PlayerChatPacket()
-                                    {
-                                        Message = $"/dm {player.Username} Unknown item",
-                                    }
-                                );
+                                SendDirectMessage(client, "Unknown item", playerId);
                             }
                         }
                     },
-                    Roles =
-                    [
-                        DigbotPlayerRole.Owner,
-                        DigbotPlayerRole.Immune,
-                        DigbotPlayerRole.None,
-                    ],
                 }
             },
             {
                 "inventory",
-                new()
-                {
-                    Execute = (args, player, client, world, random) => { },
-                    Roles =
-                    [
-                        DigbotPlayerRole.Owner,
-                        DigbotPlayerRole.Immune,
-                        DigbotPlayerRole.None,
-                    ],
-                }
+                new() { Execute = (args, player, playerId, client, world) => { } }
             },
         };
         public static readonly CaseInsensitiveDictionary<DigbotWorld> Worlds = new()
@@ -344,50 +311,142 @@ namespace digbot.Classes
         public static readonly CaseInsensitiveDictionary<DigbotItem> Items = new()
         {
             {
-                "StaticPower",
+                "GoldGain",
+                new HiddenDigbotItem() { Gold = (0f, 1f) }
+            },
+            {
+                "GoldLoss",
+                new HiddenDigbotItem() { Gold = (0f, -1f) }
+            },
+            {
+                "StaticPowerAdd",
                 new HiddenDigbotItem() { PowerBoost = (1f, 0f) }
             },
             {
-                "RelativePower",
+                "StaticPowerRemove",
+                new HiddenDigbotItem() { PowerBoost = (-1f, 0f) }
+            },
+            {
+                "RelativePowerAdd",
                 new HiddenDigbotItem() { PowerBoost = (0f, 1f) }
             },
             {
-                "StaticHealth",
-                new HiddenDigbotItem() { HealthBoost = (1f, 0f) }
+                "RelativePowerRemove",
+                new HiddenDigbotItem() { PowerBoost = (0f, -1f) }
             },
             {
-                "RelativeHealth",
-                new HiddenDigbotItem() { HealthBoost = (0f, 1f) }
-            },
-            {
-                "StaticLuck",
+                "StaticLuckAdd",
                 new HiddenDigbotItem() { LuckBoost = (1f, 0f) }
             },
             {
-                "RelativeLuck",
+                "StaticLuckRemove",
+                new HiddenDigbotItem() { LuckBoost = (-1f, 0f) }
+            },
+            {
+                "RelativeLuckAdd",
                 new HiddenDigbotItem() { LuckBoost = (0f, 1f) }
             },
             {
-                "StaticPerception",
-                new HiddenDigbotItem() { PerceptionBoost = 1 }
+                "RelativeLuckRemove",
+                new HiddenDigbotItem() { LuckBoost = (0f, -1f) }
             },
             {
-                "SmallExplosion",
+                "RandomBoost",
                 new DigbotItem()
                 {
-                    Name = "Small Explosion",
-                    Description = "A small explosion",
-                    Type = (ItemType.Tool, ActionType.Explode),
+                    Name = "Random Boost",
+                    Description = "Randomizes your stats can be good or bad",
+                    Type = (ItemType.Miscellaneous, ActionType.Unknown),
+                    Gold = (20f, 0f),
                     Use = (player, action) =>
                     {
                         if (Items is null)
-                        {
                             return null;
-                        }
                         if (action == ActionType.Use)
                         {
-                            player.RemoveItems(Items["SmallExplosion"]);
-                            return [(1f, ActionType.Explode)];
+                            player.RemoveItems(Items["RandomBoost"]);
+                            if (player is DigbotPlayer digbotPlayer)
+                            {
+                                foreach (int x in Enumerable.Range(0, 10))
+                                {
+                                    int random = digbotPlayer.RandomGenerator.Next(0, 10);
+                                    switch (random)
+                                    {
+                                        case 0:
+                                            player.AddItems(Items["GoldGain"]);
+                                            break;
+                                        case 1:
+                                            player.AddItems(Items["GoldLoss"]);
+                                            break;
+                                        case 2:
+                                            player.AddItems(Items["StaticPowerAdd"]);
+                                            break;
+                                        case 3:
+                                            player.AddItems(Items["StaticPowerRemove"]);
+                                            break;
+                                        case 4:
+                                            player.AddItems(Items["RelativePowerAdd"]);
+                                            break;
+                                        case 5:
+                                            player.AddItems(Items["RelativePowerRemove"]);
+                                            break;
+                                        case 6:
+                                            player.AddItems(Items["StaticLuckAdd"]);
+                                            break;
+                                        case 7:
+                                            player.AddItems(Items["StaticLuckRemove"]);
+                                            break;
+                                        case 8:
+                                            player.AddItems(Items["RelativeLuckAdd"]);
+                                            break;
+                                        case 9:
+                                            player.AddItems(Items["RelativeLuckRemove"]);
+                                            break;
+                                    }
+                                }
+                            }
+                        }
+                        return null;
+                    },
+                }
+            },
+            {
+                "PowerEffect",
+                new HiddenDigbotItem()
+                {
+                    Use = (player, action) =>
+                    {
+                        if (Items is null)
+                            return null;
+                        if (action == ActionType.AutoUse)
+                        {
+                            player.RemoveItems(Items["PowerPotion"]);
+                        }
+                        return null;
+                    },
+                    PowerBoost = (2f, 0.1f),
+                    Time = 60f,
+                }
+            },
+            {
+                "PowerPotion",
+                new DigbotItem()
+                {
+                    Name = "Power Potion",
+                    Description = "A potion that increases power temporarily",
+                    Type = (ItemType.Miscellaneous, ActionType.Unknown),
+                    Use = (player, action) =>
+                    {
+                        if (Items is null)
+                            return null;
+                        if (action == ActionType.Use)
+                        {
+                            if (player.Inventory.ContainsKey(Items["PowerEffect"]))
+                            {
+                                return null;
+                            }
+                            player.RemoveItems(Items["PowerPotion"]);
+                            player.AddItems(Items["PowerEffect"]);
                         }
                         return null;
                     },
@@ -489,6 +548,16 @@ namespace digbot.Classes
                     }
                 );
             }
+
+            Items.Add(
+                "Coal",
+                new()
+                {
+                    Name = "Coal",
+                    Description = "A chunk of coal",
+                    Gold = (1f, 0f),
+                }
+            );
         }
 
         private static string Capitalize(string str) => $"{str[..1].ToUpper()}{str[1..]}";
@@ -505,9 +574,8 @@ namespace digbot.Classes
                 return null;
             };
 
-            public static PartialDigbotItem operator +(PartialDigbotItem a, PartialDigbotItem b)
-            {
-                return new()
+            public static PartialDigbotItem operator +(PartialDigbotItem a, PartialDigbotItem b) =>
+                new()
                 {
                     PowerBoost = (a.PowerBoost.a + b.PowerBoost.a, a.PowerBoost.r + b.PowerBoost.r),
                     LuckBoost = (a.LuckBoost.a + b.LuckBoost.a, a.LuckBoost.r + b.LuckBoost.r),
@@ -516,32 +584,13 @@ namespace digbot.Classes
                     LimitBoost = a.LimitBoost + b.LimitBoost,
                     Use = a.Use + b.Use,
                 };
-            }
-
-            public static PartialDigbotItem operator *(PartialDigbotItem a, float b)
-            {
-                return new()
-                {
-                    PowerBoost = (a.PowerBoost.a * b, a.PowerBoost.r * b),
-                    LuckBoost = (a.LuckBoost.a * b, a.LuckBoost.r * b),
-                    PerceptionBoost = (int)(a.PerceptionBoost * b),
-                    Gold = (a.Gold.a * b, a.Gold.d * b),
-                    LimitBoost = (ItemLimits)(a.LimitBoost * b),
-                    Use = a.Use,
-                };
-            }
-
-            public static PartialDigbotItem operator *(float a, PartialDigbotItem b)
-            {
-                return b * a;
-            }
         }
 
         public static (DigbotItem Normal, DigbotItem Equipped) GenerateEquipment(
             string name,
             string description,
             int typeUse,
-            (ItemType, ActionType?) type,
+            (ItemType, ActionType) type,
             PartialDigbotItem? passiveBoost,
             PartialDigbotItem? activeBoost,
             float? time

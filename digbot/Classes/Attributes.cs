@@ -16,23 +16,30 @@ namespace digbot.Classes
             _timers.Add((item, player, time));
         }
 
-        public void Update()
+        private int _currentBatch = 0;
+
+        public void Update(float deltaTime, int batchSize = 100)
         {
-            for (int i = 0; i < _timers.Count; i++)
+            int end = Math.Min(_currentBatch + batchSize, _timers.Count);
+
+            for (int i = _currentBatch; i < end; i++)
             {
                 var (item, player, time) = _timers[i];
-                time -= 1f / 60f;
+                time -= deltaTime;
                 if (time <= 0)
                 {
                     item.Use(player, ActionType.AutoUse);
                     _timers.RemoveAt(i);
                     i--;
+                    end--;
                 }
                 else
                 {
                     _timers[i] = (item, player, time);
                 }
             }
+
+            _currentBatch = end >= _timers.Count ? 0 : end;
         }
     }
 
@@ -40,14 +47,13 @@ namespace digbot.Classes
     {
         public string Name = "";
         public string Description = "";
-        public (float a, float r) HealthBoost = (0, 0);
         public (float a, float r) PowerBoost = (0, 0);
         public ItemLimits LimitBoost = new();
         public (float a, float r) LuckBoost = (0, 0);
         public int PerceptionBoost = 0;
         public int TypeUse = 0;
         public (float a, float d) Gold = (0f, 0f);
-        public (ItemType, ActionType?) Type;
+        public (ItemType, ActionType) Type = (ItemType.Unknown, ActionType.Unknown);
         public Func<Entity, ActionType, (float, ActionType)[]?> Use = (player, action) =>
         {
             return null;
@@ -57,6 +63,8 @@ namespace digbot.Classes
 
         public void Buy(Entity player, string amount)
         {
+            if (Gold.a == 0f)
+                return;
             if (amount == "all")
                 Buy(player, (int)Math.Floor(player.Gold / Gold.a));
             else if (int.TryParse(amount, out int num))
@@ -104,7 +112,6 @@ namespace digbot.Classes
         {
             Name = "";
             Description = "";
-            Type = (ItemType.Miscellaneous, null);
             Hidden = true;
             Gold.a = 0f;
         }
@@ -231,19 +238,19 @@ namespace digbot.Classes
 
     public class DigbotCommand
     {
-        public required Action<
-            string[],
-            DigbotPlayer,
-            PixelPilotClient,
-            DigbotWorld,
-            Random
-        > Execute;
+        public required Action<string[], DigbotPlayer, int, PixelPilotClient, DigbotWorld> Execute;
 
-        public required DigbotPlayerRole[] Roles;
+        public DigbotPlayerRole[] Roles =
+        [
+            DigbotPlayerRole.None,
+            DigbotPlayerRole.Immune,
+            DigbotPlayerRole.Owner,
+        ];
         public bool LobbyCommand = false;
-        public Action<string[], DigbotPlayer, PixelPilotClient> LobbyExecute = (
+        public Action<string[], DigbotPlayer, int, PixelPilotClient> LobbyExecute = (
             args,
             player,
+            playerId,
             lobby
         ) => { };
     }
