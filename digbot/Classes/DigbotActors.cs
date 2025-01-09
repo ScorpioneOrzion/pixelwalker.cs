@@ -194,8 +194,23 @@ namespace digbot.Classes
 
         private void UpdateItemLimits(DigbotItem item, int amount)
         {
-            ItemLimits = (ItemLimits)(ItemLimits + item.LimitBoost * amount);
+            ItemLimits += item.LimitBoost * amount;
             ItemLimits[item.Type.Item1] -= item.TypeUse * amount;
+        }
+
+        public void SetItems(DigbotItem item, int amount = 0)
+        {
+            if (_inventory.ContainsKey(item))
+                _inventory[item] += amount;
+            else
+                _inventory[item] = amount;
+
+            ApplyItemEffects(item, amount);
+        }
+
+        public void AddTimer(DigbotItem item, float timer)
+        {
+            TimeManager.AddTimer(item, this, timer); // triggers autoUse after X amount of time;
         }
 
         public void AddItems(DigbotItem item, int amount = 1)
@@ -209,25 +224,17 @@ namespace digbot.Classes
                 _inventory[item] = amount;
 
             ApplyItemEffects(item, amount);
-
-            if (item.Time > 0)
-                TimeManager.AddTimer(item, this, item.Time);
         }
 
         public void RemoveItems(DigbotItem item, int amount = 1)
         {
-            if (amount <= 0 || !_inventory.TryGetValue(item, out int currentAmount))
+            if (amount <= 0)
                 return;
 
-            if (amount >= currentAmount)
-            {
-                _inventory.Remove(item);
-                amount = currentAmount;
-            }
-            else
-            {
+            if (_inventory.ContainsKey(item))
                 _inventory[item] -= amount;
-            }
+            else
+                _inventory[item] = -amount;
 
             ApplyItemEffects(item, -amount);
         }

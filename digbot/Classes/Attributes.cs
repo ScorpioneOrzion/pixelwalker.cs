@@ -28,7 +28,7 @@ namespace digbot.Classes
                 time -= deltaTime;
                 if (time <= 0)
                 {
-                    item.Use(player, ActionType.AutoUse);
+                    item.Use(player, ActionType.AutoUse, null);
                     _timers.RemoveAt(i);
                     i--;
                     end--;
@@ -54,12 +54,15 @@ namespace digbot.Classes
         public int TypeUse = 0;
         public (float a, float d) Gold = (0f, 0f);
         public (ItemType, ActionType) Type = (ItemType.Unknown, ActionType.Unknown);
-        public Func<Entity, ActionType, (float, ActionType)[]?> Use = (player, action) =>
+        public Func<Entity, ActionType, (int x, int y)?, (float, ActionType)[]?> Use = (
+            player,
+            action,
+            position
+        ) =>
         {
             return null;
         };
         public bool Hidden = false;
-        public float Time = 0f;
 
         public void Buy(Entity player, string amount)
         {
@@ -79,7 +82,7 @@ namespace digbot.Classes
                 return;
             if (player.Gold < Gold.a * amount)
                 return;
-            player.AddItems(this, amount);
+            player.SetItems(this, amount);
             player.Gold -= Gold.a * amount;
         }
 
@@ -101,7 +104,7 @@ namespace digbot.Classes
                 return;
             if (player.Inventory[this] < amount)
                 amount = player.Inventory[this];
-            player.AddItems(this, -amount);
+            player.SetItems(this, -amount);
             player.Gold += (float)(Gold.a * amount * 0.9);
         }
     }
@@ -125,7 +128,7 @@ namespace digbot.Classes
             PixelBlock,
             (int x, int y, PixelBlock block, float health),
             (PixelBlock, float, int, int)[]
-        > HealthCalculator
+        > UpdateFunction
     ) : Actor
     {
         public required string Name;
@@ -145,7 +148,7 @@ namespace digbot.Classes
             PixelBlock,
             (int x, int y, PixelBlock block, float health),
             (PixelBlock, float, int, int)[]
-        > _HealthCalculator = HealthCalculator;
+        > _UpdateFunction = UpdateFunction;
         public required float Difficulty;
         public required (PixelBlock type, float health)[,] BlockState;
         public required PixelBlock Ground;
@@ -211,7 +214,7 @@ namespace digbot.Classes
             if (Inside(position.x, position.y))
             {
                 var (oldBlock, health) = GetBlock(position);
-                var result = _HealthCalculator(
+                var result = _UpdateFunction(
                     this,
                     action,
                     actor,
@@ -238,7 +241,13 @@ namespace digbot.Classes
 
     public class DigbotCommand
     {
-        public required Action<string[], DigbotPlayer, int, PixelPilotClient, DigbotWorld> Execute;
+        public required Action<
+            string[],
+            DigbotPlayer,
+            (int id, (int x, int y) position),
+            PixelPilotClient,
+            DigbotWorld
+        > Execute;
 
         public DigbotPlayerRole[] Roles =
         [
@@ -247,12 +256,12 @@ namespace digbot.Classes
             DigbotPlayerRole.Owner,
         ];
         public bool LobbyCommand = false;
-        public Action<string[], DigbotPlayer, int, PixelPilotClient> LobbyExecute = (
-            args,
-            player,
-            playerId,
-            lobby
-        ) => { };
+        public Action<
+            string[],
+            DigbotPlayer,
+            (int id, (int x, int y) position),
+            PixelPilotClient
+        > LobbyExecute = (args, player, playerId, lobby) => { };
     }
 
     public class CaseInsensitiveDictionary<TValue> : Dictionary<string, TValue>

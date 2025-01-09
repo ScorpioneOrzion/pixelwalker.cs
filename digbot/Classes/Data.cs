@@ -9,11 +9,11 @@ namespace digbot.Classes
         private static readonly Action<PixelPilotClient, string, int> SendDirectMessage = static (
             client,
             message,
-            playerId
+            playerObj
         ) =>
         {
             client.Send(
-                new PlayerDirectMessagePacket() { Message = message, TargetPlayerId = playerId }
+                new PlayerDirectMessagePacket() { Message = message, TargetPlayerId = playerObj }
             );
         };
         public static readonly CaseInsensitiveDictionary<DigbotCommand> Commands = new()
@@ -22,7 +22,7 @@ namespace digbot.Classes
                 "reset",
                 new()
                 {
-                    Execute = (args, player, playerId, client, world) =>
+                    Execute = (args, player, playerObj, client, world) =>
                     {
                         world.Reset(client);
                     },
@@ -33,7 +33,7 @@ namespace digbot.Classes
                 "help",
                 new()
                 {
-                    Execute = (args, player, playerId, client, world) =>
+                    Execute = (args, player, playerObj, client, world) =>
                     {
                         if (args.Length == 0)
                         {
@@ -43,11 +43,11 @@ namespace digbot.Classes
                                 )
                                 .Select(command => command.Key);
                             var commandsList = string.Join(", ", commands);
-                            SendDirectMessage(client, commandsList, playerId);
+                            SendDirectMessage(client, commandsList, playerObj.id);
                         }
                     },
                     LobbyCommand = true,
-                    LobbyExecute = (args, player, playerId, lobby) =>
+                    LobbyExecute = (args, player, playerObj, lobby) =>
                     {
                         if (args.Length == 0)
                         {
@@ -62,7 +62,7 @@ namespace digbot.Classes
                                 )
                                 .Select(command => command.Key);
                             var commandsList = string.Join(", ", commands);
-                            SendDirectMessage(lobby, commandsList, playerId);
+                            SendDirectMessage(lobby, commandsList, playerObj.id);
                         }
                     },
                 }
@@ -71,7 +71,7 @@ namespace digbot.Classes
                 "exit",
                 new()
                 {
-                    Execute = (args, player, playerId, client, world) =>
+                    Execute = (args, player, playerObj, client, world) =>
                     {
                         client.Disconnect();
                     },
@@ -82,20 +82,27 @@ namespace digbot.Classes
                 "use",
                 new()
                 {
-                    Execute = (args, player, playerId, client, world) =>
+                    Execute = (args, player, playerObj, client, world) =>
                     {
-                        if (player is DigbotPlayer playerEntity)
+                        if (
+                            player is not DigbotPlayer entity
+                            || Items is null
+                            || args.Length == 0
+                            || string.IsNullOrWhiteSpace(args[0])
+                        )
                         {
-                            var result = playerEntity
-                                .Inventory.Where(Items => Items.Key.Name == args[0])
-                                .First()
-                                .Key.Use(playerEntity, ActionType.Use);
-
-                            if (result != null)
-                            {
-                                // do stuff with result
-                            }
+                            return;
                         }
+                        (float, ActionType)[]? result = null;
+                        if (
+                            Items.TryGetValue(args[0], out DigbotItem? item)
+                            && item is not null
+                            && entity.Inventory.ContainsKey(item)
+                        )
+                        {
+                            result = item.Use(entity, ActionType.Use, playerObj.position);
+                        }
+                        if (result != null) { }
                     },
                 }
             },
@@ -103,15 +110,27 @@ namespace digbot.Classes
                 "equip",
                 new()
                 {
-                    Execute = (args, player, playerId, client, world) =>
+                    Execute = (args, player, playerObj, client, world) =>
                     {
-                        if (player is Entity entity)
+                        if (
+                            player is not DigbotPlayer entity
+                            || Items is null
+                            || args.Length == 0
+                            || string.IsNullOrWhiteSpace(args[0])
+                        )
                         {
-                            entity
-                                .Inventory.Where(Items => Items.Key.Name == args[0])
-                                .First()
-                                .Key.Use(entity, ActionType.Equip);
+                            return;
                         }
+                        (float, ActionType)[]? result = null;
+                        if (
+                            Items.TryGetValue(args[0], out DigbotItem? item)
+                            && item is not null
+                            && entity.Inventory.ContainsKey(item)
+                        )
+                        {
+                            result = item.Use(entity, ActionType.Equip, playerObj.position);
+                        }
+                        if (result != null) { }
                     },
                 }
             },
@@ -119,40 +138,41 @@ namespace digbot.Classes
                 "buy",
                 new()
                 {
-                    Execute = (args, player, playerId, client, world) =>
+                    Execute = (args, player, playerObj, client, world) =>
                     {
-                        if (player is DigbotPlayer playerEntity)
+                        if (
+                            player is not DigbotPlayer playerEntity
+                            || Items is null
+                            || args.Length == 0
+                            || string.IsNullOrWhiteSpace(args[0])
+                        )
                         {
-                            if (Items is null)
-                            {
-                                return;
-                            }
-                            DigbotItem? item = Items[args[0]];
-                            if (item is not null)
-                            {
-                                if (item.Gold.a == 0f)
-                                {
-                                    SendDirectMessage(client, "You can't buy that item", playerId);
-                                    return;
-                                }
-                                if (item.Hidden)
-                                {
-                                    SendDirectMessage(client, "Unknown item", playerId);
-                                    return;
-                                }
-                                if (args.Length == 1)
-                                {
-                                    item.Buy(playerEntity);
-                                }
-                                else
-                                {
-                                    item.Buy(playerEntity, args[1]);
-                                }
-                            }
-                            else
-                            {
-                                SendDirectMessage(client, "Unknown item", playerId);
-                            }
+                            return;
+                        }
+
+                        if (
+                            !Items.TryGetValue(args[0], out DigbotItem? item)
+                            || item is null
+                            || item.Hidden
+                        )
+                        {
+                            SendDirectMessage(client, "Unknown item", playerObj.id);
+                            return;
+                        }
+
+                        if (item.Gold.a == 0f)
+                        {
+                            SendDirectMessage(client, "You can't sell that item", playerObj.id);
+                            return;
+                        }
+
+                        if (args.Length == 1)
+                        {
+                            item.Buy(playerEntity);
+                        }
+                        else
+                        {
+                            item.Buy(playerEntity, args[1]);
                         }
                     },
                 }
@@ -161,54 +181,54 @@ namespace digbot.Classes
                 "sell",
                 new()
                 {
-                    Execute = (args, player, playerId, client, world) =>
+                    Execute = (args, player, playerObj, client, world) =>
                     {
-                        if (player is DigbotPlayer playerEntity)
+                        if (
+                            player is not DigbotPlayer playerEntity
+                            || Items is null
+                            || args.Length == 0
+                            || string.IsNullOrWhiteSpace(args[0])
+                        )
                         {
-                            if (Items is null)
-                            {
-                                return;
-                            }
-                            DigbotItem? item = Items[args[0]];
-                            if (item is not null)
-                            {
-                                if (item.Gold.a == 0f)
-                                {
-                                    SendDirectMessage(client, "You can't sell that item", playerId);
-                                    return;
-                                }
-                                if (item.Hidden)
-                                {
-                                    SendDirectMessage(client, "Unknown item", playerId);
-                                    return;
-                                }
-                                if (playerEntity.Inventory.ContainsKey(item))
-                                {
-                                    if (args.Length == 1)
-                                    {
-                                        item.Sell(playerEntity);
-                                    }
-                                    else
-                                    {
-                                        item.Sell(playerEntity, args[1]);
-                                    }
-                                }
-                                else
-                                {
-                                    SendDirectMessage(client, "You don't have that item", playerId);
-                                }
-                            }
-                            else
-                            {
-                                SendDirectMessage(client, "Unknown item", playerId);
-                            }
+                            return;
+                        }
+
+                        if (
+                            !Items.TryGetValue(args[0], out DigbotItem? item)
+                            || item is null
+                            || item.Hidden
+                        )
+                        {
+                            SendDirectMessage(client, "Unknown item", playerObj.id);
+                            return;
+                        }
+
+                        if (item.Gold.a == 0f)
+                        {
+                            SendDirectMessage(client, "You can't sell that item", playerObj.id);
+                            return;
+                        }
+
+                        if (!playerEntity.Inventory.ContainsKey(item))
+                        {
+                            SendDirectMessage(client, "You don't have that item", playerObj.id);
+                            return;
+                        }
+
+                        if (args.Length == 1)
+                        {
+                            item.Sell(playerEntity);
+                        }
+                        else
+                        {
+                            item.Sell(playerEntity, args[1]);
                         }
                     },
                 }
             },
             {
                 "inventory",
-                new() { Execute = (args, player, playerId, client, world) => { } }
+                new() { Execute = (args, player, playerObj, client, world) => { } }
             },
         };
         public static readonly CaseInsensitiveDictionary<DigbotWorld> Worlds = new()
@@ -218,25 +238,21 @@ namespace digbot.Classes
                 new(
                     (world, action, actor, block, blockData) =>
                     {
-                        if (actor is Entity entity)
+                        var defaultChanges = new[] { (block, 0f, blockData.x, blockData.y) };
+                        if (actor is not Entity entity)
                         {
-                            var result = entity
-                                .Inventory.ToArray()
-                                .AsParallel()
-                                .SelectMany(item =>
-                                {
-                                    // Assuming item.Key.Use returns (float, ActionType)[]?
-                                    var useResult = item.Key.Use(entity, action);
-                                    if (useResult != null)
-                                    {
-                                        return useResult;
-                                    }
-                                    return [];
-                                })
-                                .ToArray();
-                            // do stuff with result
+                            return defaultChanges;
                         }
-                        return [(block, 0f, blockData.x, blockData.y)];
+                        var result = entity
+                            .Inventory.AsParallel()
+                            .SelectMany(item =>
+                                item.Key.Use(entity, action, (blockData.x, blockData.y))
+                                ?? Enumerable.Empty<(float, ActionType)>()
+                            )
+                            .ToArray();
+                        // do stuff with result
+
+                        return defaultChanges;
                     }
                 )
                 {
@@ -267,25 +283,21 @@ namespace digbot.Classes
                 new(
                     (world, action, actor, block, blockData) =>
                     {
-                        if (actor is Entity entity)
+                        var defaultChanges = new[] { (block, 0f, blockData.x, blockData.y) };
+                        if (actor is not Entity entity)
                         {
-                            var result = entity
-                                .Inventory.ToArray()
-                                .AsParallel()
-                                .SelectMany(item =>
-                                {
-                                    // Assuming item.Key.Use returns (float, ActionType)[]?
-                                    var useResult = item.Key.Use(entity, action);
-                                    if (useResult != null)
-                                    {
-                                        return useResult;
-                                    }
-                                    return [];
-                                })
-                                .ToArray();
-                            // do stuff with result
+                            return defaultChanges;
                         }
-                        return [(block, 0f, blockData.x, blockData.y)];
+                        var result = entity
+                            .Inventory.AsParallel()
+                            .SelectMany(item =>
+                                item.Key.Use(entity, action, (blockData.x, blockData.y))
+                                ?? Enumerable.Empty<(float, ActionType)>()
+                            )
+                            .ToArray();
+                        // do stuff with result
+
+                        return defaultChanges;
                     }
                 )
                 {
@@ -311,44 +323,24 @@ namespace digbot.Classes
         public static readonly CaseInsensitiveDictionary<DigbotItem> Items = new()
         {
             {
-                "GoldGain",
+                "Gold",
                 new HiddenDigbotItem() { Gold = (0f, 1f) }
             },
             {
-                "GoldLoss",
-                new HiddenDigbotItem() { Gold = (0f, -1f) }
-            },
-            {
-                "StaticPowerAdd",
+                "StaticPower",
                 new HiddenDigbotItem() { PowerBoost = (1f, 0f) }
             },
             {
-                "StaticPowerRemove",
-                new HiddenDigbotItem() { PowerBoost = (-1f, 0f) }
-            },
-            {
-                "RelativePowerAdd",
+                "RelativePower",
                 new HiddenDigbotItem() { PowerBoost = (0f, 1f) }
             },
             {
-                "RelativePowerRemove",
-                new HiddenDigbotItem() { PowerBoost = (0f, -1f) }
-            },
-            {
-                "StaticLuckAdd",
+                "StaticLuck",
                 new HiddenDigbotItem() { LuckBoost = (1f, 0f) }
             },
             {
-                "StaticLuckRemove",
-                new HiddenDigbotItem() { LuckBoost = (-1f, 0f) }
-            },
-            {
-                "RelativeLuckAdd",
+                "RelativeLuck",
                 new HiddenDigbotItem() { LuckBoost = (0f, 1f) }
-            },
-            {
-                "RelativeLuckRemove",
-                new HiddenDigbotItem() { LuckBoost = (0f, -1f) }
             },
             {
                 "RandomBoost",
@@ -358,7 +350,7 @@ namespace digbot.Classes
                     Description = "Randomizes your stats can be good or bad",
                     Type = (ItemType.Miscellaneous, ActionType.Unknown),
                     Gold = (20f, 0f),
-                    Use = (player, action) =>
+                    Use = (player, action, position) =>
                     {
                         if (Items is null)
                             return null;
@@ -373,34 +365,34 @@ namespace digbot.Classes
                                     switch (random)
                                     {
                                         case 0:
-                                            player.AddItems(Items["GoldGain"]);
+                                            player.SetItems(Items["Gold"], 1);
                                             break;
                                         case 1:
-                                            player.AddItems(Items["GoldLoss"]);
+                                            player.SetItems(Items["Gold"], -1);
                                             break;
                                         case 2:
-                                            player.AddItems(Items["StaticPowerAdd"]);
+                                            player.SetItems(Items["StaticPower"], 1);
                                             break;
                                         case 3:
-                                            player.AddItems(Items["StaticPowerRemove"]);
+                                            player.SetItems(Items["StaticPower"], -1);
                                             break;
                                         case 4:
-                                            player.AddItems(Items["RelativePowerAdd"]);
+                                            player.SetItems(Items["RelativePower"], 1);
                                             break;
                                         case 5:
-                                            player.AddItems(Items["RelativePowerRemove"]);
+                                            player.SetItems(Items["RelativePower"], -1);
                                             break;
                                         case 6:
-                                            player.AddItems(Items["StaticLuckAdd"]);
+                                            player.SetItems(Items["StaticLuck"], 1);
                                             break;
                                         case 7:
-                                            player.AddItems(Items["StaticLuckRemove"]);
+                                            player.SetItems(Items["StaticLuck"], -1);
                                             break;
                                         case 8:
-                                            player.AddItems(Items["RelativeLuckAdd"]);
+                                            player.SetItems(Items["RelativeLuck"], 1);
                                             break;
                                         case 9:
-                                            player.AddItems(Items["RelativeLuckRemove"]);
+                                            player.SetItems(Items["RelativeLuck"], -1);
                                             break;
                                     }
                                 }
@@ -414,18 +406,27 @@ namespace digbot.Classes
                 "PowerEffect",
                 new HiddenDigbotItem()
                 {
-                    Use = (player, action) =>
+                    Use = (player, action, position) =>
                     {
                         if (Items is null)
                             return null;
                         if (action == ActionType.AutoUse)
                         {
-                            player.RemoveItems(Items["PowerPotion"]);
+                            DigbotItem item = Items["PowerPotion"];
+                            player.SetItems(item, -1);
+                            int count = player.Inventory[item];
+                            if (count > 0)
+                            {
+                                player.AddTimer(item, 60f);
+                            }
+                            else if (count < 0)
+                            {
+                                player.SetItems(item, -count);
+                            }
                         }
                         return null;
                     },
                     PowerBoost = (2f, 0.1f),
-                    Time = 60f,
                 }
             },
             {
@@ -435,7 +436,7 @@ namespace digbot.Classes
                     Name = "Power Potion",
                     Description = "A potion that increases power temporarily",
                     Type = (ItemType.Miscellaneous, ActionType.Unknown),
-                    Use = (player, action) =>
+                    Use = (player, action, position) =>
                     {
                         if (Items is null)
                             return null;
@@ -445,8 +446,10 @@ namespace digbot.Classes
                             {
                                 return null;
                             }
-                            player.RemoveItems(Items["PowerPotion"]);
-                            player.AddItems(Items["PowerEffect"]);
+                            player.SetItems(Items["PowerPotion"], -1);
+                            player.SetItems(Items["PowerEffect"], 1);
+
+                            player.AddTimer(Items["PowerEffect"], 60f);
                         }
                         return null;
                     },
@@ -468,8 +471,7 @@ namespace digbot.Classes
                     1,
                     (ItemType.Tool, ActionType.Mine),
                     null,
-                    new() { PowerBoost = (1f, 0) },
-                    null
+                    new() { PowerBoost = (1f, 0) }
                 )
             );
 
@@ -481,8 +483,7 @@ namespace digbot.Classes
                     1,
                     (ItemType.Tool, ActionType.Mine),
                     null,
-                    new() { PowerBoost = (2f, 0) },
-                    null
+                    new() { PowerBoost = (2f, 0) }
                 )
             );
 
@@ -494,8 +495,7 @@ namespace digbot.Classes
                     1,
                     (ItemType.Tool, ActionType.Mine),
                     null,
-                    new() { PowerBoost = (2f, 0) },
-                    null
+                    new() { PowerBoost = (2f, 0) }
                 )
             );
 
@@ -507,8 +507,7 @@ namespace digbot.Classes
                     1,
                     (ItemType.Tool, ActionType.Mine),
                     null,
-                    new() { PowerBoost = (4f, 0) },
-                    null
+                    new() { PowerBoost = (4f, 0) }
                 )
             );
 
@@ -569,7 +568,11 @@ namespace digbot.Classes
             public (float a, float d) Gold = (0f, 0f);
             public int PerceptionBoost;
             public ItemLimits LimitBoost = new();
-            public Func<Entity, ActionType, (float, ActionType)[]?> Use = (player, action) =>
+            public Func<Entity, ActionType, (int x, int y)?, (float, ActionType)[]?> Use = (
+                player,
+                action,
+                position
+            ) =>
             {
                 return null;
             };
@@ -592,8 +595,7 @@ namespace digbot.Classes
             int typeUse,
             (ItemType, ActionType) type,
             PartialDigbotItem? passiveBoost,
-            PartialDigbotItem? activeBoost,
-            float? time
+            PartialDigbotItem? activeBoost
         )
         {
             passiveBoost ??= new();
@@ -617,7 +619,6 @@ namespace digbot.Classes
                 Description = description,
                 TypeUse = typeUse,
                 Type = type,
-                Time = time ?? 0f,
                 PowerBoost = activeBoost.PowerBoost,
                 LuckBoost = activeBoost.LuckBoost,
                 PerceptionBoost = activeBoost.PerceptionBoost,
@@ -625,21 +626,21 @@ namespace digbot.Classes
                 Gold = (0f, activeBoost.Gold.d),
                 Use = activeBoost.Use,
             };
-            normal.Use += (player, action) =>
+            normal.Use += (player, action, position) =>
             {
                 if (action == ActionType.Equip && player.ItemLimits[type.Item1] >= typeUse)
                 {
-                    player.RemoveItems(normal);
-                    player.AddItems(equipped);
+                    player.SetItems(normal, -1);
+                    player.SetItems(equipped, 1);
                 }
                 return null;
             };
-            equipped.Use += (player, action) =>
+            equipped.Use += (player, action, position) =>
             {
                 if (action == ActionType.Equip)
                 {
-                    player.RemoveItems(equipped);
-                    player.AddItems(normal);
+                    player.SetItems(equipped, -1);
+                    player.SetItems(normal, 1);
                 }
                 return null;
             };

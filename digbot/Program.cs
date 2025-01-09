@@ -100,6 +100,8 @@ foreach (var command in Registry.Commands)
 
         DigbotPlayer playerObj = players[player.Username];
 
+        var position = (x: (int)(player.X / 16.0 + 0.5), y: (int)(player.Y / 16.0 + 0.5));
+
         switch (packet)
         {
             case PlayerChatPacket chatPacket:
@@ -119,7 +121,12 @@ foreach (var command in Registry.Commands)
                     Console.WriteLine("Command found");
                     if (command.Roles.Contains(playerObj.Role))
                     {
-                        command.LobbyExecute(args[1..], playerObj, playerId.Value, client);
+                        command.LobbyExecute(
+                            args[1..],
+                            playerObj,
+                            (playerId.Value, position),
+                            client
+                        );
                     }
                     else
                     {
@@ -249,9 +256,12 @@ foreach (var command in Registry.Commands)
         if (player == null)
             return;
 
+        var position = (
+            x: (int)Math.Floor(player.X / 16.0 + 0.5),
+            y: (int)Math.Floor(player.Y / 16.0 + 0.5)
+        );
+
         DigbotPlayer playerObj = players[player.Username];
-        int x;
-        int y;
 
         switch (packet)
         {
@@ -272,7 +282,7 @@ foreach (var command in Registry.Commands)
                         command.Execute(
                             args[1..],
                             playerObj,
-                            playerId.Value,
+                            (playerId.Value, position),
                             client,
                             worldTemplate
                         );
@@ -297,57 +307,59 @@ foreach (var command in Registry.Commands)
                 break;
 
             case PlayerMovedPacket movedPacket:
-                x = (int)((movedPacket.Position.X / 16.0) + 0.5);
-                y = (int)((movedPacket.Position.Y / 16.0) + 0.5);
-                if (y < worldTemplate.AirHeight - 1 || !worldTemplate.Breaking)
+                if (position.y < worldTemplate.AirHeight - 1 || !worldTemplate.Breaking)
                     return;
-                bool bothAreZero = movedPacket.Horizontal == 0 && movedPacket.Vertical == 0;
-                bool bothAreNonZero = movedPacket.Horizontal != 0 && movedPacket.Vertical != 0;
                 bool atLeastOneIsZero = movedPacket.Horizontal == 0 || movedPacket.Vertical == 0;
                 bool atLeastOneIsNonZero = movedPacket.Horizontal != 0 || movedPacket.Vertical != 0;
-                if (movedPacket.SpaceJustDown && atLeastOneIsZero)
+                if (movedPacket.SpaceJustDown && atLeastOneIsZero && atLeastOneIsNonZero)
                 {
                     if (movedPacket.Horizontal != 0)
                     {
-                        x += movedPacket.Horizontal;
+                        position.x += movedPacket.Horizontal;
                     }
                     else if (movedPacket.Vertical != 0)
                     {
-                        y += movedPacket.Vertical;
+                        position.y += movedPacket.Vertical;
                     }
 
-                    if (!worldTemplate.Inside(x, y - worldTemplate.AirHeight))
+                    if (!worldTemplate.Inside(position.x, position.y - worldTemplate.AirHeight))
                         return;
                     if (
-                        worldTemplate.GetBlock(x, y - worldTemplate.AirHeight).type
-                            == PixelBlock.Empty
-                        && atLeastOneIsNonZero
+                        worldTemplate
+                            .GetBlock(position.x, position.y - worldTemplate.AirHeight)
+                            .type == PixelBlock.Empty
                     )
                         return;
                     if (
-                        worldTemplate.GetBlock(x, y - worldTemplate.AirHeight).type
-                        == PixelBlock.GenericBlackTransparent
+                        worldTemplate
+                            .GetBlock(position.x, position.y - worldTemplate.AirHeight)
+                            .type == PixelBlock.GenericBlackTransparent
                     )
                         return;
 
                     List<IPlacedBlock> blockList = [];
                     PixelBlock currentType = worldTemplate
-                        .GetBlock(x, y - worldTemplate.AirHeight)
+                        .GetBlock(position.x, position.y - worldTemplate.AirHeight)
                         .type;
                     worldTemplate.ActBlock(
                         ActionType.Mine,
                         playerObj,
-                        x,
-                        y - worldTemplate.AirHeight,
+                        position.x,
+                        position.y - worldTemplate.AirHeight,
                         PixelBlock.Empty
                     );
                     PixelBlock newBlock = worldTemplate
-                        .GetBlock(x, y - worldTemplate.AirHeight)
+                        .GetBlock(position.x, position.y - worldTemplate.AirHeight)
                         .type;
                     if (currentType != newBlock)
                     {
                         blockList.Add(
-                            new PlacedBlock(x, y, WorldLayer.Foreground, new BasicBlock(newBlock))
+                            new PlacedBlock(
+                                position.x,
+                                position.y,
+                                WorldLayer.Foreground,
+                                new BasicBlock(newBlock)
+                            )
                         );
                     }
 
@@ -357,8 +369,8 @@ foreach (var command in Registry.Commands)
 
                         foreach (var (dx, dy) in offsets)
                         {
-                            int newX = x + dx;
-                            int newY = y + dy;
+                            int newX = position.x + dx;
+                            int newY = position.y + dy;
                             if (!worldTemplate.Inside(newX, newY - worldTemplate.AirHeight))
                                 continue;
                             if (
@@ -367,7 +379,7 @@ foreach (var command in Registry.Commands)
                             )
                                 continue;
                             var list = worldTemplate.Blocks.Where(block =>
-                                block.condition(playerObj, (x, y))
+                                block.condition(playerObj, position)
                             );
                             int randomWeight = random.Next(list.Sum(block => block.weight));
                             var block = list.First(block =>
