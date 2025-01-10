@@ -127,7 +127,7 @@ namespace digbot.Classes
             Actor,
             PixelBlock,
             (int x, int y, PixelBlock block, float health),
-            (PixelBlock, float, int, int)[]
+            (PixelBlock block, float health, int x, int y)[]
         > UpdateFunction
     ) : Actor
     {
@@ -147,9 +147,8 @@ namespace digbot.Classes
             Actor,
             PixelBlock,
             (int x, int y, PixelBlock block, float health),
-            (PixelBlock, float, int, int)[]
+            (PixelBlock block, float health, int x, int y)[]
         > _UpdateFunction = UpdateFunction;
-        public required float Difficulty;
         public required (PixelBlock type, float health)[,] BlockState;
         public required PixelBlock Ground;
         public bool Breaking;
@@ -199,12 +198,18 @@ namespace digbot.Classes
             client.SendRange(blockList.ToChunkedPackets());
         }
 
-        public void ActBlock(ActionType action, Actor actor, int x, int y, PixelBlock block)
+        public (PixelBlock block, float health, int x, int y)[] ActBlock(
+            ActionType action,
+            Actor actor,
+            int x,
+            int y,
+            PixelBlock block
+        )
         {
-            ActBlock(action, actor, (x, y), block);
+            return ActBlock(action, actor, (x, y), block);
         }
 
-        public void ActBlock(
+        public (PixelBlock block, float health, int x, int y)[] ActBlock(
             ActionType action,
             Actor actor,
             (int x, int y) position,
@@ -221,7 +226,16 @@ namespace digbot.Classes
                     block,
                     (position.x, position.y, oldBlock, health)
                 );
+
+                for (var i = 0; i < result.Length; i++)
+                {
+                    result[i].y += AirHeight;
+                }
+
+                return result;
             }
+
+            return [];
         }
 
         public (PixelBlock type, float health) GetBlock((int x, int y) position)

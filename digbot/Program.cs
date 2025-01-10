@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using digbot.Classes;
 using dotenv.net;
 using PixelPilot.Client;
@@ -309,9 +310,8 @@ foreach (var command in Registry.Commands)
             case PlayerMovedPacket movedPacket:
                 if (position.y < worldTemplate.AirHeight - 1 || !worldTemplate.Breaking)
                     return;
-                bool atLeastOneIsZero = movedPacket.Horizontal == 0 || movedPacket.Vertical == 0;
                 bool atLeastOneIsNonZero = movedPacket.Horizontal != 0 || movedPacket.Vertical != 0;
-                if (movedPacket.SpaceJustDown && atLeastOneIsZero && atLeastOneIsNonZero)
+                if (movedPacket.SpaceJustDown && atLeastOneIsNonZero)
                 {
                     if (movedPacket.Horizontal != 0)
                     {
@@ -341,27 +341,26 @@ foreach (var command in Registry.Commands)
                     PixelBlock currentType = worldTemplate
                         .GetBlock(position.x, position.y - worldTemplate.AirHeight)
                         .type;
-                    worldTemplate.ActBlock(
-                        ActionType.Mine,
-                        playerObj,
-                        position.x,
-                        position.y - worldTemplate.AirHeight,
-                        PixelBlock.Empty
-                    );
-                    PixelBlock newBlock = worldTemplate
-                        .GetBlock(position.x, position.y - worldTemplate.AirHeight)
-                        .type;
-                    if (currentType != newBlock)
-                    {
-                        blockList.Add(
-                            new PlacedBlock(
+
+                    blockList.AddRange(
+                        worldTemplate
+                            .ActBlock(
+                                ActionType.Mine,
+                                playerObj,
                                 position.x,
-                                position.y,
-                                WorldLayer.Foreground,
-                                new BasicBlock(newBlock)
+                                position.y - worldTemplate.AirHeight,
+                                PixelBlock.Empty
                             )
-                        );
-                    }
+                            .Select(blockChange =>
+                            {
+                                return new PlacedBlock(
+                                    blockChange.x,
+                                    blockChange.y,
+                                    WorldLayer.Foreground,
+                                    new BasicBlock(blockChange.block)
+                                );
+                            })
+                    );
 
                     if (atLeastOneIsNonZero)
                     {
@@ -385,20 +384,25 @@ foreach (var command in Registry.Commands)
                             var block = list.First(block =>
                                 (randomWeight -= block.weight) < 0
                             ).block;
-                            worldTemplate.ActBlock(
-                                ActionType.Reveal,
-                                playerObj,
-                                newX,
-                                newY - worldTemplate.AirHeight,
-                                block
-                            );
-                            blockList.Add(
-                                new PlacedBlock(
-                                    newX,
-                                    newY,
-                                    WorldLayer.Foreground,
-                                    new BasicBlock(block)
-                                )
+
+                            blockList.AddRange(
+                                worldTemplate
+                                    .ActBlock(
+                                        ActionType.Reveal,
+                                        playerObj,
+                                        newX,
+                                        newY - worldTemplate.AirHeight,
+                                        block
+                                    )
+                                    .Select(blockChange =>
+                                    {
+                                        return new PlacedBlock(
+                                            blockChange.x,
+                                            blockChange.y,
+                                            WorldLayer.Foreground,
+                                            new BasicBlock(blockChange.block)
+                                        );
+                                    })
                             );
                         }
                     }
@@ -434,6 +438,7 @@ var activeClients = new List<PixelPilotClient>();
 CaseInsensitiveDictionary<DigbotWorld> worlds = Registry.Worlds;
 
 var (client, joinKey) = SetupWorld();
+bool isRunning = true;
 
 async Task StartWorld(string worldKey)
 {
@@ -466,7 +471,8 @@ async Task StartWorld(string worldKey)
 
 await client.Connect(joinKey);
 activeClients.Add(client);
-async Task Init()
+
+_ = Task.Run(async () =>
 {
     try
     {
@@ -477,26 +483,57 @@ async Task Init()
         lock (activeClients)
         {
             activeClients.Remove(client);
+            isRunning = false;
         }
     }
-}
-_ = Init();
-while (true)
+});
+
+const int targetFrameRate = 60; // 60 FPS
+TimeSpan frameInterval = TimeSpan.FromSeconds(1.0 / targetFrameRate);
+TimeSpan checkInterval = TimeSpan.FromMinutes(5); // Check active clients every 5 minutes
+var stopwatch = new Stopwatch(); // For deltaTime calculation
+stopwatch.Start();
+
+var checkTimer = Stopwatch.StartNew(); // For periodic client checks
+
+while (isRunning)
 {
-    await Task.Delay(TimeSpan.FromMinutes(5));
-    lock (activeClients)
+    // Calculate deltaTime for this frame
+    float deltaTime = (float)stopwatch.Elapsed.TotalSeconds;
+    stopwatch.Restart();
+
+    // Call the Update function with deltaTime
+    TimeManager.Update(deltaTime);
+
+    // Check for active clients at the specified interval
+    if (checkTimer.Elapsed >= checkInterval)
     {
-        if (activeClients.Count == 0)
+        lock (activeClients)
         {
-            Console.WriteLine("No active clients remaining. Exiting...");
-            break;
+            if (activeClients.Count == 0)
+            {
+                Console.WriteLine("No active clients remaining. Exiting...");
+                isRunning = false; // Stop the update loop
+            }
+            else
+            {
+                Console.WriteLine(
+                    $"{activeClients.Count} clients still active. Checking again in 5 minutes..."
+                );
+            }
         }
-        else
-        {
-            Console.WriteLine(
-                $"{activeClients.Count} clients still active. Checking again in 5 minutes..."
-            );
-        }
+        checkTimer.Restart();
+    }
+
+    // Maintain the target frame rate
+    await Task.Delay(frameInterval);
+}
+
+lock (activeClients)
+{
+    foreach (var active in activeClients.ToList()) // ToList() creates a snapshot of the list
+    {
+        active.Disconnect();
     }
 }
 

@@ -128,7 +128,16 @@ namespace digbot.Classes
                             && entity.Inventory.ContainsKey(item)
                         )
                         {
-                            result = item.Use(entity, ActionType.Equip, playerObj.position);
+                            if (player.ItemLimits[item.Type.Item1] >= item.TypeUse)
+                            {
+                                SendDirectMessage(
+                                    client,
+                                    "You can't equip that, unequip something first",
+                                    playerObj.id
+                                );
+                            }
+                            else
+                                result = item.Use(entity, ActionType.Equip, playerObj.position);
                         }
                         if (result != null) { }
                     },
@@ -238,10 +247,9 @@ namespace digbot.Classes
                 new(
                     (world, action, actor, block, blockData) =>
                     {
-                        var defaultChanges = new[] { (block, 0f, blockData.x, blockData.y) };
                         if (actor is not Entity entity)
                         {
-                            return defaultChanges;
+                            return [];
                         }
                         var result = entity
                             .Inventory.AsParallel()
@@ -252,7 +260,7 @@ namespace digbot.Classes
                             .ToArray();
                         // do stuff with result
 
-                        return defaultChanges;
+                        return [];
                     }
                 )
                 {
@@ -275,7 +283,6 @@ namespace digbot.Classes
                         (PixelBlock.GemstoneBlack, 1, (player, position) => true),
                     ],
                     Commands = Commands,
-                    Difficulty = 1,
                 }
             },
             {
@@ -283,10 +290,13 @@ namespace digbot.Classes
                 new(
                     (world, action, actor, block, blockData) =>
                     {
-                        var defaultChanges = new[] { (block, 0f, blockData.x, blockData.y) };
+                        if (actor == world)
+                        {
+                            return [(block, 5f * blockData.y, blockData.x, blockData.y)];
+                        }
                         if (actor is not Entity entity)
                         {
-                            return defaultChanges;
+                            return [];
                         }
                         var result = entity
                             .Inventory.AsParallel()
@@ -296,8 +306,7 @@ namespace digbot.Classes
                             )
                             .ToArray();
                         // do stuff with result
-
-                        return defaultChanges;
+                        return [];
                     }
                 )
                 {
@@ -315,7 +324,6 @@ namespace digbot.Classes
                         (PixelBlock.BasicCyan, 5, (player, position) => true),
                     ],
                     Commands = Commands,
-                    Difficulty = 1,
                 }
             },
         };
@@ -464,10 +472,10 @@ namespace digbot.Classes
         public static void Initialize()
         {
             EquippedItems.Add(
-                "starterPickaxe",
+                "0Pickaxe",
                 GenerateEquipment(
                     "Starter Pickaxe",
-                    "A basic pickaxe",
+                    "The weakest Pickaxe",
                     1,
                     (ItemType.Tool, ActionType.Mine),
                     null,
@@ -476,10 +484,10 @@ namespace digbot.Classes
             );
 
             EquippedItems.Add(
-                "starterDrill",
+                "0Drill",
                 GenerateEquipment(
                     "Starter Drill",
-                    "A basic drill",
+                    "The weakest Drill",
                     1,
                     (ItemType.Tool, ActionType.Mine),
                     null,
@@ -488,7 +496,7 @@ namespace digbot.Classes
             );
 
             EquippedItems.Add(
-                "advancedPickaxe",
+                "1Pickaxe",
                 GenerateEquipment(
                     "Advanced Pickaxe",
                     "An advanced pickaxe",
@@ -500,7 +508,103 @@ namespace digbot.Classes
             );
 
             EquippedItems.Add(
-                "advancedDrill",
+                "1Drill",
+                GenerateEquipment(
+                    "Advanced Drill",
+                    "An advanced drill",
+                    1,
+                    (ItemType.Tool, ActionType.Mine),
+                    null,
+                    new() { PowerBoost = (4f, 0) }
+                )
+            );
+
+            EquippedItems.Add(
+                "2Pickaxe",
+                GenerateEquipment(
+                    "Advanced Pickaxe",
+                    "An advanced pickaxe",
+                    1,
+                    (ItemType.Tool, ActionType.Mine),
+                    null,
+                    new() { PowerBoost = (2f, 0) }
+                )
+            );
+
+            EquippedItems.Add(
+                "2Drill",
+                GenerateEquipment(
+                    "Advanced Drill",
+                    "An advanced drill",
+                    1,
+                    (ItemType.Tool, ActionType.Mine),
+                    null,
+                    new() { PowerBoost = (4f, 0) }
+                )
+            );
+
+            EquippedItems.Add(
+                "3Pickaxe",
+                GenerateEquipment(
+                    "Advanced Pickaxe",
+                    "An advanced pickaxe",
+                    1,
+                    (ItemType.Tool, ActionType.Mine),
+                    null,
+                    new() { PowerBoost = (2f, 0) }
+                )
+            );
+
+            EquippedItems.Add(
+                "3Drill",
+                GenerateEquipment(
+                    "Advanced Drill",
+                    "An advanced drill",
+                    1,
+                    (ItemType.Tool, ActionType.Mine),
+                    null,
+                    new() { PowerBoost = (4f, 0) }
+                )
+            );
+
+            EquippedItems.Add(
+                "4Pickaxe",
+                GenerateEquipment(
+                    "Advanced Pickaxe",
+                    "An advanced pickaxe",
+                    1,
+                    (ItemType.Tool, ActionType.Mine),
+                    null,
+                    new() { PowerBoost = (2f, 0) }
+                )
+            );
+
+            EquippedItems.Add(
+                "4Drill",
+                GenerateEquipment(
+                    "Advanced Drill",
+                    "An advanced drill",
+                    1,
+                    (ItemType.Tool, ActionType.Mine),
+                    null,
+                    new() { PowerBoost = (4f, 0) }
+                )
+            );
+
+            EquippedItems.Add(
+                "5Pickaxe",
+                GenerateEquipment(
+                    "Advanced Pickaxe",
+                    "An advanced pickaxe",
+                    1,
+                    (ItemType.Tool, ActionType.Mine),
+                    null,
+                    new() { PowerBoost = (2f, 0) }
+                )
+            );
+
+            EquippedItems.Add(
+                "5Drill",
                 GenerateEquipment(
                     "Advanced Drill",
                     "An advanced drill",
@@ -628,11 +732,12 @@ namespace digbot.Classes
             };
             normal.Use += (player, action, position) =>
             {
-                if (action == ActionType.Equip && player.ItemLimits[type.Item1] >= typeUse)
+                if (action == ActionType.Equip)
                 {
                     player.SetItems(normal, -1);
                     player.SetItems(equipped, 1);
                 }
+
                 return null;
             };
             equipped.Use += (player, action, position) =>
