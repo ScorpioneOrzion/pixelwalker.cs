@@ -136,6 +136,8 @@ namespace digbot.Classes
     {
         private (float a, float r) _power = (0, 0);
 
+        // NOTE create DIGBOTRESULT
+
         public float AbsolutePower
         {
             get => _power.a;
@@ -195,7 +197,7 @@ namespace digbot.Classes
         private void UpdateItemLimits(DigbotItem item, int amount)
         {
             ItemLimits += item.LimitBoost * amount;
-            ItemLimits[item.Type.Item1] -= item.TypeUse * amount;
+            ItemLimits[item.Type] -= item.TypeUse * amount;
         }
 
         public void SetItems(DigbotItem item, int amount = 0)
@@ -211,32 +213,6 @@ namespace digbot.Classes
         public void AddTimer(DigbotItem item, float timer)
         {
             TimeManager.AddTimer(item, this, timer); // triggers autoUse after X amount of time;
-        }
-
-        public void AddItems(DigbotItem item, int amount = 1)
-        {
-            if (amount <= 0)
-                return;
-
-            if (_inventory.ContainsKey(item))
-                _inventory[item] += amount;
-            else
-                _inventory[item] = amount;
-
-            ApplyItemEffects(item, amount);
-        }
-
-        public void RemoveItems(DigbotItem item, int amount = 1)
-        {
-            if (amount <= 0)
-                return;
-
-            if (_inventory.ContainsKey(item))
-                _inventory[item] -= amount;
-            else
-                _inventory[item] = -amount;
-
-            ApplyItemEffects(item, -amount);
         }
     }
 

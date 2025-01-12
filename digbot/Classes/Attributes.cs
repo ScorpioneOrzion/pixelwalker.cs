@@ -53,7 +53,7 @@ namespace digbot.Classes
         public int PerceptionBoost = 0;
         public int TypeUse = 0;
         public (float a, float d) Gold = (0f, 0f);
-        public (ItemType, ActionType) Type = (ItemType.Unknown, ActionType.Unknown);
+        public ItemType Type = ItemType.Unknown;
         public Func<Entity, ActionType, (int x, int y)?, (float, ActionType)[]?> Use = (
             player,
             action,

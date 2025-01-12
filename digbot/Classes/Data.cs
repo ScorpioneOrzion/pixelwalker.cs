@@ -128,18 +128,22 @@ namespace digbot.Classes
                             && entity.Inventory.ContainsKey(item)
                         )
                         {
-                            if (player.ItemLimits[item.Type.Item1] >= item.TypeUse)
-                            {
-                                SendDirectMessage(
-                                    client,
-                                    "You can't equip that, unequip something first",
-                                    playerObj.id
-                                );
-                            }
-                            else
-                                result = item.Use(entity, ActionType.Equip, playerObj.position);
+                            result = item.Use(entity, ActionType.Equip, playerObj.position);
                         }
-                        if (result != null) { }
+                        if (result != null)
+                        {
+                            foreach (var (amount, type) in result)
+                            {
+                                if (amount == -1f && type == ActionType.Equip)
+                                {
+                                    SendDirectMessage(
+                                        client,
+                                        "You can't equip that, unequip something first",
+                                        playerObj.id
+                                    );
+                                }
+                            }
+                        }
                     },
                 }
             },
@@ -356,7 +360,7 @@ namespace digbot.Classes
                 {
                     Name = "Random Boost",
                     Description = "Randomizes your stats can be good or bad",
-                    Type = (ItemType.Miscellaneous, ActionType.Unknown),
+                    Type = ItemType.Miscellaneous,
                     Gold = (20f, 0f),
                     Use = (player, action, position) =>
                     {
@@ -364,7 +368,7 @@ namespace digbot.Classes
                             return null;
                         if (action == ActionType.Use)
                         {
-                            player.RemoveItems(Items["RandomBoost"]);
+                            player.SetItems(Items["RandomBoost"], -1);
                             if (player is DigbotPlayer digbotPlayer)
                             {
                                 foreach (int x in Enumerable.Range(0, 10))
@@ -443,7 +447,7 @@ namespace digbot.Classes
                 {
                     Name = "Power Potion",
                     Description = "A potion that increases power temporarily",
-                    Type = (ItemType.Miscellaneous, ActionType.Unknown),
+                    Type = ItemType.Miscellaneous,
                     Use = (player, action, position) =>
                     {
                         if (Items is null)
@@ -464,156 +468,21 @@ namespace digbot.Classes
                 }
             },
         };
-        public static readonly CaseInsensitiveDictionary<(
-            DigbotItem Normal,
-            DigbotItem Equipped
-        )> EquippedItems = [];
 
         public static void Initialize()
         {
-            EquippedItems.Add(
-                "0Pickaxe",
-                GenerateEquipment(
-                    "Starter Pickaxe",
-                    "The weakest Pickaxe",
-                    1,
-                    (ItemType.Tool, ActionType.Mine),
-                    null,
-                    new() { PowerBoost = (1f, 0) }
-                )
-            );
-
-            EquippedItems.Add(
-                "0Drill",
-                GenerateEquipment(
-                    "Starter Drill",
-                    "The weakest Drill",
-                    1,
-                    (ItemType.Tool, ActionType.Mine),
-                    null,
-                    new() { PowerBoost = (2f, 0) }
-                )
-            );
-
-            EquippedItems.Add(
-                "1Pickaxe",
-                GenerateEquipment(
-                    "Advanced Pickaxe",
-                    "An advanced pickaxe",
-                    1,
-                    (ItemType.Tool, ActionType.Mine),
-                    null,
-                    new() { PowerBoost = (2f, 0) }
-                )
-            );
-
-            EquippedItems.Add(
-                "1Drill",
-                GenerateEquipment(
-                    "Advanced Drill",
-                    "An advanced drill",
-                    1,
-                    (ItemType.Tool, ActionType.Mine),
-                    null,
-                    new() { PowerBoost = (4f, 0) }
-                )
-            );
-
-            EquippedItems.Add(
-                "2Pickaxe",
-                GenerateEquipment(
-                    "Advanced Pickaxe",
-                    "An advanced pickaxe",
-                    1,
-                    (ItemType.Tool, ActionType.Mine),
-                    null,
-                    new() { PowerBoost = (2f, 0) }
-                )
-            );
-
-            EquippedItems.Add(
-                "2Drill",
-                GenerateEquipment(
-                    "Advanced Drill",
-                    "An advanced drill",
-                    1,
-                    (ItemType.Tool, ActionType.Mine),
-                    null,
-                    new() { PowerBoost = (4f, 0) }
-                )
-            );
-
-            EquippedItems.Add(
-                "3Pickaxe",
-                GenerateEquipment(
-                    "Advanced Pickaxe",
-                    "An advanced pickaxe",
-                    1,
-                    (ItemType.Tool, ActionType.Mine),
-                    null,
-                    new() { PowerBoost = (2f, 0) }
-                )
-            );
-
-            EquippedItems.Add(
-                "3Drill",
-                GenerateEquipment(
-                    "Advanced Drill",
-                    "An advanced drill",
-                    1,
-                    (ItemType.Tool, ActionType.Mine),
-                    null,
-                    new() { PowerBoost = (4f, 0) }
-                )
-            );
-
-            EquippedItems.Add(
-                "4Pickaxe",
-                GenerateEquipment(
-                    "Advanced Pickaxe",
-                    "An advanced pickaxe",
-                    1,
-                    (ItemType.Tool, ActionType.Mine),
-                    null,
-                    new() { PowerBoost = (2f, 0) }
-                )
-            );
-
-            EquippedItems.Add(
-                "4Drill",
-                GenerateEquipment(
-                    "Advanced Drill",
-                    "An advanced drill",
-                    1,
-                    (ItemType.Tool, ActionType.Mine),
-                    null,
-                    new() { PowerBoost = (4f, 0) }
-                )
-            );
-
-            EquippedItems.Add(
-                "5Pickaxe",
-                GenerateEquipment(
-                    "Advanced Pickaxe",
-                    "An advanced pickaxe",
-                    1,
-                    (ItemType.Tool, ActionType.Mine),
-                    null,
-                    new() { PowerBoost = (2f, 0) }
-                )
-            );
-
-            EquippedItems.Add(
-                "5Drill",
-                GenerateEquipment(
-                    "Advanced Drill",
-                    "An advanced drill",
-                    1,
-                    (ItemType.Tool, ActionType.Mine),
-                    null,
-                    new() { PowerBoost = (4f, 0) }
-                )
-            );
+            AddPickaxe("pickaxe0Unequiped", "pickaxe0Equiped", ItemType.Tool, 1f, 1);
+            AddPickaxe("pickaxe1Unequiped", "pickaxe1Equiped", ItemType.Tool, 2.25f, 2);
+            AddPickaxe("pickaxe2Unequiped", "pickaxe2Equiped", ItemType.Tool, 3.5f, 3);
+            AddPickaxe("pickaxe3Unequiped", "pickaxe3Equiped", ItemType.Tool, 6.0f, 5);
+            AddPickaxe("pickaxe4Unequiped", "pickaxe4Equiped", ItemType.Tool, 9.75f, 8);
+            AddPickaxe("pickaxe5Unequiped", "pickaxe5Equiped", ItemType.Tool, 16.0f, 13);
+            AddDrill("drill0Unequiped", "drill0Equiped", ItemType.Tool, 2f, 2);
+            AddDrill("drill1Unequiped", "drill1Equiped", ItemType.Tool, 4.5f, 4);
+            AddDrill("drill2Unequiped", "drill2Equiped", ItemType.Tool, 7f, 6);
+            AddDrill("drill3Unequiped", "drill3Equiped", ItemType.Tool, 12f, 10);
+            AddDrill("drill4Unequiped", "drill4Equiped", ItemType.Tool, 19.5f, 16);
+            AddDrill("drill5Unequiped", "drill5Equiped", ItemType.Tool, 32f, 26);
 
             Dictionary<string, object> ores = new()
             {
@@ -665,91 +534,103 @@ namespace digbot.Classes
 
         private static string Capitalize(string str) => $"{str[..1].ToUpper()}{str[1..]}";
 
-        public class PartialDigbotItem
-        {
-            public (float a, float r) PowerBoost;
-            public (float a, float r) LuckBoost;
-            public (float a, float d) Gold = (0f, 0f);
-            public int PerceptionBoost;
-            public ItemLimits LimitBoost = new();
-            public Func<Entity, ActionType, (int x, int y)?, (float, ActionType)[]?> Use = (
-                player,
-                action,
-                position
-            ) =>
-            {
-                return null;
-            };
-
-            public static PartialDigbotItem operator +(PartialDigbotItem a, PartialDigbotItem b) =>
-                new()
-                {
-                    PowerBoost = (a.PowerBoost.a + b.PowerBoost.a, a.PowerBoost.r + b.PowerBoost.r),
-                    LuckBoost = (a.LuckBoost.a + b.LuckBoost.a, a.LuckBoost.r + b.LuckBoost.r),
-                    PerceptionBoost = a.PerceptionBoost + b.PerceptionBoost,
-                    Gold = (a.Gold.a + b.Gold.a, a.Gold.d + b.Gold.d),
-                    LimitBoost = a.LimitBoost + b.LimitBoost,
-                    Use = a.Use + b.Use,
-                };
-        }
-
-        public static (DigbotItem Normal, DigbotItem Equipped) GenerateEquipment(
-            string name,
-            string description,
-            int typeUse,
-            (ItemType, ActionType) type,
-            PartialDigbotItem? passiveBoost,
-            PartialDigbotItem? activeBoost
+        private static void AddPickaxe(
+            string unequippedName,
+            string equippedName,
+            ItemType type,
+            float powerBoost,
+            int typeUse = 1
         )
         {
-            passiveBoost ??= new();
-            activeBoost ??= new();
-            activeBoost += passiveBoost;
-            DigbotItem normal = new()
+            DigbotItem unequippedItem = new() { Type = type };
+            DigbotItem equippedItem = new()
             {
-                Name = name,
-                Description = description,
                 Type = type,
-                PowerBoost = passiveBoost.PowerBoost,
-                LuckBoost = passiveBoost.LuckBoost,
-                PerceptionBoost = passiveBoost.PerceptionBoost,
-                LimitBoost = passiveBoost.LimitBoost,
-                Gold = passiveBoost.Gold,
-                Use = passiveBoost.Use,
-            };
-            DigbotItem equipped = new()
-            {
-                Name = name,
-                Description = description,
                 TypeUse = typeUse,
-                Type = type,
-                PowerBoost = activeBoost.PowerBoost,
-                LuckBoost = activeBoost.LuckBoost,
-                PerceptionBoost = activeBoost.PerceptionBoost,
-                LimitBoost = activeBoost.LimitBoost,
-                Gold = (0f, activeBoost.Gold.d),
-                Use = activeBoost.Use,
+                PowerBoost = (powerBoost, 0),
             };
-            normal.Use += (player, action, position) =>
-            {
-                if (action == ActionType.Equip)
-                {
-                    player.SetItems(normal, -1);
-                    player.SetItems(equipped, 1);
-                }
 
-                return null;
-            };
-            equipped.Use += (player, action, position) =>
+            unequippedItem.Use += (player, action, position) =>
             {
                 if (action == ActionType.Equip)
                 {
-                    player.SetItems(equipped, -1);
-                    player.SetItems(normal, 1);
+                    if (player.ItemLimits[equippedItem.Type] < equippedItem.TypeUse)
+                    {
+                        return [(-1f, ActionType.Equip)];
+                    }
+                    player.SetItems(equippedItem, 1);
+                    player.SetItems(unequippedItem, -1);
                 }
                 return null;
             };
-            return (normal, equipped);
+
+            equippedItem.Use += (player, action, position) =>
+            {
+                if (action == ActionType.Equip)
+                {
+                    player.SetItems(unequippedItem, 1);
+                    player.SetItems(equippedItem, -1);
+                }
+                return null;
+            };
+
+            Items.Add(unequippedName, unequippedItem);
+            Items.Add(equippedName, equippedItem);
+        }
+
+        private static void AddDrill(
+            string unequippedName,
+            string equippedName,
+            ItemType type,
+            float powerBoost,
+            int typeUse = 1
+        )
+        {
+            DigbotItem unequippedItem = new() { Type = type };
+            DigbotItem equippedItem = new()
+            {
+                Type = type,
+                TypeUse = typeUse,
+                PowerBoost = (powerBoost, 0),
+            };
+
+            unequippedItem.Use += (player, action, position) =>
+            {
+                if (action == ActionType.Equip)
+                {
+                    if (player.ItemLimits[equippedItem.Type] < equippedItem.TypeUse)
+                    {
+                        return [(-1f, ActionType.Equip)];
+                    }
+                    player.SetItems(equippedItem, 1);
+                    player.SetItems(unequippedItem, -1);
+                }
+                return null;
+            };
+
+            equippedItem.Use += (player, action, position) =>
+            {
+                if (action == ActionType.Equip)
+                {
+                    player.SetItems(unequippedItem, 1);
+                    player.SetItems(equippedItem, -1);
+                }
+                else if (action == ActionType.Mine)
+                {
+                    if (player.Gold >= typeUse * 2)
+                    {
+                        player.Gold -= typeUse * 2;
+                    }
+                    else
+                    {
+                        return [(-equippedItem.PowerBoost.a, ActionType.Mine)];
+                    }
+                }
+                return null;
+            };
+
+            Items.Add(unequippedName, unequippedItem);
+            Items.Add(equippedName, equippedItem);
         }
     }
 }
