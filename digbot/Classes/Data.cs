@@ -93,7 +93,7 @@ namespace digbot.Classes
                         {
                             return;
                         }
-                        (float, ActionType)[]? result = null;
+                        (Stats, List<string>)? result = null;
                         if (
                             Items.TryGetValue(args[0], out DigbotItem? item)
                             && item is not null
@@ -121,7 +121,7 @@ namespace digbot.Classes
                         {
                             return;
                         }
-                        (float, ActionType)[]? result = null;
+                        (Stats, List<string>)? result = null;
                         if (
                             Items.TryGetValue(args[0], out DigbotItem? item)
                             && item is not null
@@ -130,18 +130,15 @@ namespace digbot.Classes
                         {
                             result = item.Use(entity, ActionType.Equip, playerObj.position);
                         }
-                        if (result != null)
+                        if (result is (Stats stats, List<string> messages))
                         {
-                            foreach (var (amount, type) in result)
+                            if (messages.Any(message => message == "Error"))
                             {
-                                if (amount == -1f && type == ActionType.Equip)
-                                {
-                                    SendDirectMessage(
-                                        client,
-                                        "You can't equip that, unequip something first",
-                                        playerObj.id
-                                    );
-                                }
+                                SendDirectMessage(
+                                    client,
+                                    "You can't equip that, unequip something first",
+                                    playerObj.id
+                                );
                             }
                         }
                     },
@@ -173,7 +170,7 @@ namespace digbot.Classes
                             return;
                         }
 
-                        if (item.Gold.a == 0f)
+                        if (!item.Buyable)
                         {
                             SendDirectMessage(client, "You can't sell that item", playerObj.id);
                             return;
@@ -216,13 +213,16 @@ namespace digbot.Classes
                             return;
                         }
 
-                        if (item.Gold.a == 0f)
+                        if (!item.Buyable)
                         {
                             SendDirectMessage(client, "You can't sell that item", playerObj.id);
                             return;
                         }
 
-                        if (!playerEntity.Inventory.ContainsKey(item))
+                        if (
+                            !playerEntity.Inventory.ContainsKey(item)
+                            || playerEntity.Inventory[item] <= 0
+                        )
                         {
                             SendDirectMessage(client, "You don't have that item", playerObj.id);
                             return;
@@ -251,18 +251,15 @@ namespace digbot.Classes
                 new(
                     (world, action, actor, block, blockData) =>
                     {
+                        if (actor == world)
+                        {
+                            return [(block, 5f * blockData.y, blockData.x, blockData.y)];
+                        }
                         if (actor is not Entity entity)
                         {
                             return [];
                         }
-                        var result = entity
-                            .Inventory.AsParallel()
-                            .SelectMany(item =>
-                                item.Key.Use(entity, action, (blockData.x, blockData.y))
-                                ?? Enumerable.Empty<(float, ActionType)>()
-                            )
-                            .ToArray();
-                        // do stuff with result
+                        var result = entity.Use(action, (blockData.x, blockData.y));
 
                         return [];
                     }
@@ -302,13 +299,7 @@ namespace digbot.Classes
                         {
                             return [];
                         }
-                        var result = entity
-                            .Inventory.AsParallel()
-                            .SelectMany(item =>
-                                item.Key.Use(entity, action, (blockData.x, blockData.y))
-                                ?? Enumerable.Empty<(float, ActionType)>()
-                            )
-                            .ToArray();
+                        var result = entity.Use(action, (blockData.x, blockData.y));
                         // do stuff with result
                         return [];
                     }
@@ -335,133 +326,56 @@ namespace digbot.Classes
         public static readonly CaseInsensitiveDictionary<DigbotItem> Items = new()
         {
             {
-                "Gold",
-                new HiddenDigbotItem() { Gold = (0f, 1f) }
-            },
-            {
                 "StaticPower",
-                new HiddenDigbotItem() { PowerBoost = (1f, 0f) }
+                new HiddenDigbotItem()
+                {
+                    Use = (entity, action, position) =>
+                    {
+                        if (action == ActionType.Mine)
+                        {
+                            return (new() { AbsoluteStrength = 0.01f }, []);
+                        }
+                        return null;
+                    },
+                }
             },
             {
                 "RelativePower",
-                new HiddenDigbotItem() { PowerBoost = (0f, 1f) }
+                new HiddenDigbotItem()
+                {
+                    Use = (entity, action, position) =>
+                    {
+                        if (action == ActionType.Mine)
+                        {
+                            return (new() { RelativeStrength = 0.01f }, []);
+                        }
+                        return null;
+                    },
+                }
             },
             {
                 "StaticLuck",
-                new HiddenDigbotItem() { LuckBoost = (1f, 0f) }
+                new HiddenDigbotItem()
+                {
+                    Use = (entity, action, position) =>
+                    {
+                        if (action == ActionType.Mine)
+                        {
+                            return (new() { AbsoluteLuck = 0.01f }, []);
+                        }
+                        return null;
+                    },
+                }
             },
             {
                 "RelativeLuck",
-                new HiddenDigbotItem() { LuckBoost = (0f, 1f) }
-            },
-            {
-                "RandomBoost",
-                new DigbotItem()
-                {
-                    Name = "Random Boost",
-                    Description = "Randomizes your stats can be good or bad",
-                    Type = ItemType.Miscellaneous,
-                    Gold = (20f, 0f),
-                    Use = (player, action, position) =>
-                    {
-                        if (Items is null)
-                            return null;
-                        if (action == ActionType.Use)
-                        {
-                            player.SetItems(Items["RandomBoost"], -1);
-                            if (player is DigbotPlayer digbotPlayer)
-                            {
-                                foreach (int x in Enumerable.Range(0, 10))
-                                {
-                                    int random = digbotPlayer.RandomGenerator.Next(0, 10);
-                                    switch (random)
-                                    {
-                                        case 0:
-                                            player.SetItems(Items["Gold"], 1);
-                                            break;
-                                        case 1:
-                                            player.SetItems(Items["Gold"], -1);
-                                            break;
-                                        case 2:
-                                            player.SetItems(Items["StaticPower"], 1);
-                                            break;
-                                        case 3:
-                                            player.SetItems(Items["StaticPower"], -1);
-                                            break;
-                                        case 4:
-                                            player.SetItems(Items["RelativePower"], 1);
-                                            break;
-                                        case 5:
-                                            player.SetItems(Items["RelativePower"], -1);
-                                            break;
-                                        case 6:
-                                            player.SetItems(Items["StaticLuck"], 1);
-                                            break;
-                                        case 7:
-                                            player.SetItems(Items["StaticLuck"], -1);
-                                            break;
-                                        case 8:
-                                            player.SetItems(Items["RelativeLuck"], 1);
-                                            break;
-                                        case 9:
-                                            player.SetItems(Items["RelativeLuck"], -1);
-                                            break;
-                                    }
-                                }
-                            }
-                        }
-                        return null;
-                    },
-                }
-            },
-            {
-                "PowerEffect",
                 new HiddenDigbotItem()
                 {
-                    Use = (player, action, position) =>
+                    Use = (entity, action, position) =>
                     {
-                        if (Items is null)
-                            return null;
-                        if (action == ActionType.AutoUse)
+                        if (action == ActionType.Mine)
                         {
-                            DigbotItem item = Items["PowerPotion"];
-                            player.SetItems(item, -1);
-                            int count = player.Inventory[item];
-                            if (count > 0)
-                            {
-                                player.AddTimer(item, 60f);
-                            }
-                            else if (count < 0)
-                            {
-                                player.SetItems(item, -count);
-                            }
-                        }
-                        return null;
-                    },
-                    PowerBoost = (2f, 0.1f),
-                }
-            },
-            {
-                "PowerPotion",
-                new DigbotItem()
-                {
-                    Name = "Power Potion",
-                    Description = "A potion that increases power temporarily",
-                    Type = ItemType.Miscellaneous,
-                    Use = (player, action, position) =>
-                    {
-                        if (Items is null)
-                            return null;
-                        if (action == ActionType.Use)
-                        {
-                            if (player.Inventory.ContainsKey(Items["PowerEffect"]))
-                            {
-                                return null;
-                            }
-                            player.SetItems(Items["PowerPotion"], -1);
-                            player.SetItems(Items["PowerEffect"], 1);
-
-                            player.AddTimer(Items["PowerEffect"], 60f);
+                            return (new() { RelativeLuck = 0.01f }, []);
                         }
                         return null;
                     },
@@ -505,7 +419,7 @@ namespace digbot.Classes
                     {
                         Name = $"{Capitalize(oreNames[i])} Ore",
                         Description = $"A chunk of {oreNames[i]} ore",
-                        Gold = (5f, 0f),
+                        Cost = 5f,
                     }
                 );
 
@@ -516,7 +430,7 @@ namespace digbot.Classes
                     {
                         Name = $"{Capitalize(oreNames[i])} Ingot",
                         Description = $"A bar of {oreNames[i]} ingot",
-                        Gold = (10f, 0f),
+                        Cost = 10f,
                     }
                 );
             }
@@ -527,7 +441,7 @@ namespace digbot.Classes
                 {
                     Name = "Coal",
                     Description = "A chunk of coal",
-                    Gold = (1f, 0f),
+                    Cost = 1f,
                 }
             );
         }
@@ -543,12 +457,7 @@ namespace digbot.Classes
         )
         {
             DigbotItem unequippedItem = new() { Type = type };
-            DigbotItem equippedItem = new()
-            {
-                Type = type,
-                TypeUse = typeUse,
-                PowerBoost = (powerBoost, 0),
-            };
+            DigbotItem equippedItem = new() { Type = type, TypeUse = typeUse };
 
             unequippedItem.Use += (player, action, position) =>
             {
@@ -556,7 +465,7 @@ namespace digbot.Classes
                 {
                     if (player.ItemLimits[equippedItem.Type] < equippedItem.TypeUse)
                     {
-                        return [(-1f, ActionType.Equip)];
+                        return (new Stats(), ["Error"]);
                     }
                     player.SetItems(equippedItem, 1);
                     player.SetItems(unequippedItem, -1);
@@ -570,6 +479,10 @@ namespace digbot.Classes
                 {
                     player.SetItems(unequippedItem, 1);
                     player.SetItems(equippedItem, -1);
+                }
+                else if (action == ActionType.Mine)
+                {
+                    return (new Stats() { AbsoluteStrength = powerBoost }, []);
                 }
                 return null;
             };
@@ -587,12 +500,7 @@ namespace digbot.Classes
         )
         {
             DigbotItem unequippedItem = new() { Type = type };
-            DigbotItem equippedItem = new()
-            {
-                Type = type,
-                TypeUse = typeUse,
-                PowerBoost = (powerBoost, 0),
-            };
+            DigbotItem equippedItem = new() { Type = type, TypeUse = typeUse };
 
             unequippedItem.Use += (player, action, position) =>
             {
@@ -600,7 +508,7 @@ namespace digbot.Classes
                 {
                     if (player.ItemLimits[equippedItem.Type] < equippedItem.TypeUse)
                     {
-                        return [(-1f, ActionType.Equip)];
+                        return (new Stats(), ["Error"]);
                     }
                     player.SetItems(equippedItem, 1);
                     player.SetItems(unequippedItem, -1);
@@ -620,10 +528,11 @@ namespace digbot.Classes
                     if (player.Gold >= typeUse * 2)
                     {
                         player.Gold -= typeUse * 2;
+                        return (new Stats() { AbsoluteStrength = powerBoost }, []);
                     }
                     else
                     {
-                        return [(-equippedItem.PowerBoost.a, ActionType.Mine)];
+                        return (new Stats(), ["Not enough Gold"]);
                     }
                 }
                 return null;

@@ -130,75 +130,177 @@ namespace digbot.Classes
         }
     }
 
+    public class Stats
+    {
+        public float AbsoluteStrength = default;
+        public float RelativeStrength = default;
+        public float AbsoluteLuck = default;
+        public float RelativeLuck = default;
+        public float AbsolutePerception = default;
+        public float RelativePerception = default;
+        public float Strength => AbsoluteStrength * (1 + RelativeStrength);
+        public float Luck => AbsoluteLuck * (1 + RelativeLuck);
+        public float Perception => AbsolutePerception * (1 + RelativePerception);
+
+        public static Stats operator +(Stats a, Stats b)
+        {
+            return new Stats
+            {
+                AbsoluteStrength = a.AbsoluteStrength + b.AbsoluteStrength,
+                RelativeStrength = a.RelativeStrength + b.RelativeStrength,
+                AbsoluteLuck = a.AbsoluteLuck + b.AbsoluteLuck,
+                RelativeLuck = a.RelativeLuck + b.RelativeLuck,
+                AbsolutePerception = a.AbsolutePerception + b.AbsolutePerception,
+                RelativePerception = a.RelativePerception + b.RelativePerception,
+            };
+        }
+
+        public static Stats operator -(Stats a, Stats b)
+        {
+            return new Stats
+            {
+                AbsoluteStrength = a.AbsoluteStrength - b.AbsoluteStrength,
+                RelativeStrength = a.RelativeStrength - b.RelativeStrength,
+                AbsoluteLuck = a.AbsoluteLuck - b.AbsoluteLuck,
+                RelativeLuck = a.RelativeLuck - b.RelativeLuck,
+                AbsolutePerception = a.AbsolutePerception - b.AbsolutePerception,
+                RelativePerception = a.RelativePerception - b.RelativePerception,
+            };
+        }
+
+        public static Stats operator *(Stats a, Stats b)
+        {
+            return new Stats
+            {
+                AbsoluteStrength = a.AbsoluteStrength * b.AbsoluteStrength,
+                RelativeStrength = a.RelativeStrength * b.RelativeStrength,
+                AbsoluteLuck = a.AbsoluteLuck * b.AbsoluteLuck,
+                RelativeLuck = a.RelativeLuck * b.RelativeLuck,
+                AbsolutePerception = a.AbsolutePerception * b.AbsolutePerception,
+                RelativePerception = a.RelativePerception * b.RelativePerception,
+            };
+        }
+
+        public static Stats operator *(Stats a, int multiplier)
+        {
+            return new Stats
+            {
+                AbsoluteStrength = a.AbsoluteStrength * multiplier,
+                RelativeStrength = a.RelativeStrength * multiplier,
+                AbsoluteLuck = a.AbsoluteLuck * multiplier,
+                RelativeLuck = a.RelativeLuck * multiplier,
+                AbsolutePerception = a.AbsolutePerception * multiplier,
+                RelativePerception = a.RelativePerception * multiplier,
+            };
+        }
+
+        public static Stats operator *(int multiplier, Stats a) => a * multiplier;
+    }
+
+    public class DigbotItem
+    {
+        public string Name = "";
+        public string Description = "";
+        public ItemLimits ItemLimits = new();
+        public int TypeUse = 0;
+        public float Cost = 0f;
+        public ItemType Type = default;
+        public bool Hidden = false;
+        public bool Buyable => Cost != 0f || Hidden == true;
+        public Func<Entity, ActionType, (int x, int y)?, (Stats, List<string>)?> Use = (
+            entity,
+            action,
+            position
+        ) =>
+        {
+            return null;
+        };
+
+        public void Buy(Entity player, string amount)
+        {
+            if (!Buyable)
+                return;
+            if (amount == "all")
+                Buy(player, (int)Math.Floor(player.Gold / Cost));
+            else if (int.TryParse(amount, out int num))
+                Buy(player, num);
+        }
+
+        public void Buy(Entity player, int amount = 1)
+        {
+            if (amount <= 0)
+                return;
+            if (!Buyable)
+                return;
+            if (player.Gold < Cost * amount)
+                return;
+            player.SetItems(this, amount);
+            player.Gold -= Cost * amount;
+        }
+
+        public void Sell(Entity player, string amount)
+        {
+            if (!Buyable)
+                return;
+            if (amount == "all")
+                Sell(player, player.Inventory[this]);
+            else if (int.TryParse(amount, out int num))
+                Sell(player, num);
+        }
+
+        public void Sell(Entity player, int amount = 1)
+        {
+            if (amount <= 0)
+                return;
+            if (!Buyable)
+                return;
+            if (!player.Inventory.ContainsKey(this))
+                return;
+            if (player.Inventory[this] < amount)
+                amount = player.Inventory[this];
+            player.SetItems(this, -amount);
+            player.Gold += Cost * amount * 0.9f;
+        }
+    }
+
+    public class HiddenDigbotItem : DigbotItem
+    {
+        public HiddenDigbotItem()
+        {
+            Cost = 0f;
+            Hidden = true;
+        }
+    }
+
     public abstract class Actor { }
 
     public abstract class Entity : Actor
     {
-        private (float a, float r) _power = (0, 0);
-
-        // NOTE create DIGBOTRESULT
-
-        public float AbsolutePower
+        public (Stats, List<string>) Use(ActionType action, (int x, int y)? position)
         {
-            get => _power.a;
-            set => _power.a = value;
+            Stats totalStats = new();
+            List<string> messages = [];
+
+            foreach (var (item, count) in Inventory)
+            {
+                var result = item.Use(this, action, position); // Get the result from the item
+
+                // If the result is not null and contains Stats and messages
+                if (result != null && result.Value is (Stats stats, List<string> message))
+                {
+                    totalStats += stats * count;
+                    messages.AddRange(message);
+                }
+            }
+
+            return (totalStats, messages);
         }
 
-        public float RelativePower
-        {
-            get => _power.r;
-            set => _power.r = value;
-        }
-
-        public float GetPower => AbsolutePower * (1 + RelativePower);
-        public required TimeManager TimeManager;
-
-        public int Perception = 1;
-        private (float a, float r) _luck = (0, 0);
-        private (float current, float loss) _gold = (0f, 0f);
-        public float AbsoluteLuck
-        {
-            get => _luck.a;
-            set => _luck.a = value;
-        }
-        public float RelativeLuck
-        {
-            get => _luck.r;
-            set => _luck.r = value;
-        }
-        public float Luck => AbsoluteLuck * (1 + RelativeLuck);
-        public float Gold
-        {
-            get => _gold.current;
-            set => _gold.current = value;
-        }
-
-        public float GoldDrop
-        {
-            get => _gold.loss;
-            set => _gold.loss = value;
-        }
+        public float Gold = default;
 
         public ItemLimits ItemLimits { get; private set; } = new();
         private readonly Dictionary<DigbotItem, int> _inventory = [];
         public IReadOnlyDictionary<DigbotItem, int> Inventory => _inventory.AsReadOnly();
-
-        private void ApplyItemEffects(DigbotItem item, int multiplier)
-        {
-            AbsolutePower += item.PowerBoost.a * multiplier;
-            RelativePower += item.PowerBoost.r * multiplier;
-            AbsoluteLuck += item.LuckBoost.a * multiplier;
-            RelativeLuck += item.LuckBoost.r * multiplier;
-            Perception += item.PerceptionBoost * multiplier;
-            GoldDrop += item.Gold.d * multiplier;
-            UpdateItemLimits(item, multiplier);
-        }
-
-        private void UpdateItemLimits(DigbotItem item, int amount)
-        {
-            ItemLimits += item.LimitBoost * amount;
-            ItemLimits[item.Type] -= item.TypeUse * amount;
-        }
 
         public void SetItems(DigbotItem item, int amount = 0)
         {
@@ -206,13 +308,6 @@ namespace digbot.Classes
                 _inventory[item] += amount;
             else
                 _inventory[item] = amount;
-
-            ApplyItemEffects(item, amount);
-        }
-
-        public void AddTimer(DigbotItem item, float timer)
-        {
-            TimeManager.AddTimer(item, this, timer); // triggers autoUse after X amount of time;
         }
     }
 
@@ -222,7 +317,10 @@ namespace digbot.Classes
 
         public DigbotPlayer(float initialPower = 1)
         {
-            AbsolutePower = initialPower;
+            if (Registry.Items != null)
+            {
+                SetItems(Registry.Items["StaticPower"], (int)(initialPower * 100));
+            }
             RandomGenerator = new Random((int)DateTime.Now.Ticks ^ this.GetHashCode());
         }
 

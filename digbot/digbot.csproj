@@ -6,9 +6,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="PixelPilot.Core" Version="1.10.2" />
-    <PackageReference Include="PixelPilot.Structures" Version="1.10.2" />
-    <PackageReference Include="PixelPilot.ChatCommands" Version="1.10.2" />
+    <PackageReference Include="PixelPilot.Core" Version="1.11.3" />
+    <PackageReference Include="PixelPilot.Structures" Version="1.11.3" />
+    <PackageReference Include="PixelPilot.ChatCommands" Version="1.11.3" />
     <PackageReference Include="dotenv.net" Version="3.2.1" />
   </ItemGroup>
 

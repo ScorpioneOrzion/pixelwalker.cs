@@ -31,7 +31,6 @@ Dictionary<string, DigbotPlayerRole> SetRoles = new()
 var players = new Dictionary<string, DigbotPlayer> { };
 
 Registry.Initialize();
-var TimeManager = new TimeManager();
 
 Action<PixelPilotClient, string, int> SendPrivateMessage = (client, message, playerId) =>
 {
@@ -67,24 +66,14 @@ foreach (var command in Registry.Commands)
         {
             players.Add(
                 player.Username,
-                new DigbotPlayer()
-                {
-                    Username = player.Username,
-                    Role = role,
-                    TimeManager = TimeManager,
-                }
+                new DigbotPlayer() { Username = player.Username, Role = role }
             );
         }
         else
         {
             players.Add(
                 player.Username,
-                new DigbotPlayer()
-                {
-                    Role = DigbotPlayerRole.None,
-                    Username = player.Username,
-                    TimeManager = TimeManager,
-                }
+                new DigbotPlayer() { Role = DigbotPlayerRole.None, Username = player.Username }
             );
         }
     };
@@ -179,24 +168,14 @@ foreach (var command in Registry.Commands)
             {
                 players.Add(
                     player.Username,
-                    new DigbotPlayer()
-                    {
-                        Username = player.Username,
-                        Role = role,
-                        TimeManager = TimeManager,
-                    }
+                    new DigbotPlayer() { Username = player.Username, Role = role }
                 );
             }
             else
             {
                 players.Add(
                     player.Username,
-                    new DigbotPlayer()
-                    {
-                        Role = DigbotPlayerRole.None,
-                        Username = player.Username,
-                        TimeManager = TimeManager,
-                    }
+                    new DigbotPlayer() { Role = DigbotPlayerRole.None, Username = player.Username }
                 );
             }
         }
@@ -362,50 +341,50 @@ foreach (var command in Registry.Commands)
                             })
                     );
 
-                    if (atLeastOneIsNonZero)
-                    {
-                        (int, int)[] offsets = ranges()[playerObj.Perception];
+                    // if (atLeastOneIsNonZero)
+                    // {
+                    //     (int, int)[] offsets = ranges()[playerObj.Perception];
 
-                        foreach (var (dx, dy) in offsets)
-                        {
-                            int newX = position.x + dx;
-                            int newY = position.y + dy;
-                            if (!worldTemplate.Inside(newX, newY - worldTemplate.AirHeight))
-                                continue;
-                            if (
-                                worldTemplate.GetBlock(newX, newY - worldTemplate.AirHeight).type
-                                != PixelBlock.GenericBlackTransparent
-                            )
-                                continue;
-                            var list = worldTemplate.Blocks.Where(block =>
-                                block.condition(playerObj, position)
-                            );
-                            int randomWeight = random.Next(list.Sum(block => block.weight));
-                            var block = list.First(block =>
-                                (randomWeight -= block.weight) < 0
-                            ).block;
+                    //     foreach (var (dx, dy) in offsets)
+                    //     {
+                    //         int newX = position.x + dx;
+                    //         int newY = position.y + dy;
+                    //         if (!worldTemplate.Inside(newX, newY - worldTemplate.AirHeight))
+                    //             continue;
+                    //         if (
+                    //             worldTemplate.GetBlock(newX, newY - worldTemplate.AirHeight).type
+                    //             != PixelBlock.GenericBlackTransparent
+                    //         )
+                    //             continue;
+                    //         var list = worldTemplate.Blocks.Where(block =>
+                    //             block.condition(playerObj, position)
+                    //         );
+                    //         int randomWeight = random.Next(list.Sum(block => block.weight));
+                    //         var block = list.First(block =>
+                    //             (randomWeight -= block.weight) < 0
+                    //         ).block;
 
-                            blockList.AddRange(
-                                worldTemplate
-                                    .ActBlock(
-                                        ActionType.Reveal,
-                                        playerObj,
-                                        newX,
-                                        newY - worldTemplate.AirHeight,
-                                        block
-                                    )
-                                    .Select(blockChange =>
-                                    {
-                                        return new PlacedBlock(
-                                            blockChange.x,
-                                            blockChange.y,
-                                            WorldLayer.Foreground,
-                                            new BasicBlock(blockChange.block)
-                                        );
-                                    })
-                            );
-                        }
-                    }
+                    //         blockList.AddRange(
+                    //             worldTemplate
+                    //                 .ActBlock(
+                    //                     ActionType.Reveal,
+                    //                     playerObj,
+                    //                     newX,
+                    //                     newY - worldTemplate.AirHeight,
+                    //                     block
+                    //                 )
+                    //                 .Select(blockChange =>
+                    //                 {
+                    //                     return new PlacedBlock(
+                    //                         blockChange.x,
+                    //                         blockChange.y,
+                    //                         WorldLayer.Foreground,
+                    //                         new BasicBlock(blockChange.block)
+                    //                     );
+                    //                 })
+                    //         );
+                    //     }
+                    // }
                     Task.Run(async () =>
                     {
                         await Task.Delay(100);
@@ -494,19 +473,14 @@ TimeSpan checkInterval = TimeSpan.FromMinutes(5); // Check active clients every 
 var stopwatch = new Stopwatch(); // For deltaTime calculation
 stopwatch.Start();
 
-var checkTimer = Stopwatch.StartNew(); // For periodic client checks
-
 while (isRunning)
 {
     // Calculate deltaTime for this frame
-    float deltaTime = (float)stopwatch.Elapsed.TotalSeconds;
-    stopwatch.Restart();
 
     // Call the Update function with deltaTime
-    TimeManager.Update(deltaTime);
 
     // Check for active clients at the specified interval
-    if (checkTimer.Elapsed >= checkInterval)
+    if (stopwatch.Elapsed >= checkInterval)
     {
         lock (activeClients)
         {
@@ -522,7 +496,7 @@ while (isRunning)
                 );
             }
         }
-        checkTimer.Restart();
+        stopwatch.Restart();
     }
 
     // Maintain the target frame rate
@@ -537,6 +511,7 @@ lock (activeClients)
     }
 }
 
+// EOF
 Dictionary<int, (int dx, int dy)[]> ranges()
 {
     return new Dictionary<int, (int dx, int dy)[]>
