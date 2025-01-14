@@ -15,6 +15,7 @@ namespace digbot.Classes
         Use, // for actions that use items
         AutoUse, // for actions that use items automatically
         Mine, // for actions that mine blocks
+        Drill, // for actions that mine blocks
         Explode, // for actions that explode blocks
         Electrify, // for actions that electrify blocks
         Transform, // for actions that transform blocks

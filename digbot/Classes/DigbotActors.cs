@@ -1,3 +1,6 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
 namespace digbot.Classes
 {
     public class ItemLimits(int baseValue = 0)
@@ -199,6 +202,7 @@ namespace digbot.Classes
 
     public class DigbotItem
     {
+        public required string Key;
         public string Name = "";
         public string Description = "";
         public ItemLimits ItemLimits = new();
@@ -234,7 +238,7 @@ namespace digbot.Classes
                 return;
             if (player.Gold < Cost * amount)
                 return;
-            player.SetItems(this, amount);
+            player.SetItems(Key, amount);
             player.Gold -= Cost * amount;
         }
 
@@ -243,7 +247,7 @@ namespace digbot.Classes
             if (!Buyable)
                 return;
             if (amount == "all")
-                Sell(player, player.Inventory[this]);
+                Sell(player, player.Inventory[Key]);
             else if (int.TryParse(amount, out int num))
                 Sell(player, num);
         }
@@ -254,11 +258,11 @@ namespace digbot.Classes
                 return;
             if (!Buyable)
                 return;
-            if (!player.Inventory.ContainsKey(this))
+            if (!player.Inventory.ContainsKey(Key))
                 return;
-            if (player.Inventory[this] < amount)
-                amount = player.Inventory[this];
-            player.SetItems(this, -amount);
+            if (player.Inventory[Key] < amount)
+                amount = player.Inventory[Key];
+            player.SetItems(Key, -amount);
             player.Gold += Cost * amount * 0.9f;
         }
     }
@@ -276,13 +280,19 @@ namespace digbot.Classes
 
     public abstract class Entity : Actor
     {
+        public float Gold = default;
+        public ItemLimits ItemLimits { get; private set; } = new();
+        public Dictionary<string, int> Inventory = [];
+
         public (Stats, List<string>) Use(ActionType action, (int x, int y)? position)
         {
             Stats totalStats = new();
             List<string> messages = [];
 
-            foreach (var (item, count) in Inventory)
+            foreach (var (key, count) in Inventory)
             {
+                DigbotItem item = Registry.Items[key];
+
                 var result = item.Use(this, action, position); // Get the result from the item
 
                 // If the result is not null and contains Stats and messages
@@ -296,40 +306,88 @@ namespace digbot.Classes
             return (totalStats, messages);
         }
 
-        public float Gold = default;
-
-        public ItemLimits ItemLimits { get; private set; } = new();
-        private readonly Dictionary<DigbotItem, int> _inventory = [];
-        public IReadOnlyDictionary<DigbotItem, int> Inventory => _inventory.AsReadOnly();
-
         public void SetItems(DigbotItem item, int amount = 0)
         {
-            if (_inventory.ContainsKey(item))
-                _inventory[item] += amount;
+            SetItems(item.Key, amount);
+        }
+
+        public void SetItems(string item, int amount = 0)
+        {
+            if (Inventory.ContainsKey(item))
+                Inventory[item] += amount;
             else
-                _inventory[item] = amount;
+                Inventory[item] = amount;
         }
     }
 
     public class DigbotPlayer : Entity
     {
+        public required DigbotPlayerRole Role;
         public Random RandomGenerator { get; private set; }
 
         public DigbotPlayer(float initialPower = 1)
         {
-            if (Registry.Items != null)
-            {
-                SetItems(Registry.Items["StaticPower"], (int)(initialPower * 100));
-            }
+            SetItems("AbsoluteStrength", (int)(initialPower * 100));
             RandomGenerator = new Random((int)DateTime.Now.Ticks ^ this.GetHashCode());
+        }
+
+        public DigbotPlayer(Dictionary<string, int> inventory, float gold)
+        {
+            Inventory = inventory;
+            Gold = gold;
+            RandomGenerator = new Random((int)DateTime.Now.Ticks ^ this.GetHashCode());
+        }
+
+        public string Save
+        {
+            get
+            {
+                var inventoryToSerialize = Inventory.ToDictionary(
+                    kvp => Registry.OrderedKeys.IndexOf(kvp.Key),
+                    kvp => kvp.Value
+                );
+
+                return JsonSerializer.Serialize(
+                    new
+                    {
+                        Gold,
+                        Role,
+                        Inventory = inventoryToSerialize,
+                    }
+                );
+            }
+        }
+
+        public static DigbotPlayer Load(string json)
+        {
+            // Deserialize the JSON string
+            var data = JsonSerializer.Deserialize<SaveData>(json);
+
+            if (data is null)
+            {
+                return new() { Role = DigbotPlayerRole.None };
+            }
+
+            // Map the indices back to the keys in the registry
+            var inventory = data.Inventory.ToDictionary(
+                kvp => Registry.OrderedKeys[kvp.Key], // Lookup key by index
+                kvp => kvp.Value // Retain the count
+            );
+
+            // Construct and return the DigbotPlayer object
+            return new DigbotPlayer(inventory, data.Gold) { Role = (DigbotPlayerRole)data.Role };
         }
 
         public int GetRandomInt(int min, int max)
         {
             return RandomGenerator.Next(min, max);
         }
+    }
 
-        public required DigbotPlayerRole Role;
-        public required string Username;
+    public class SaveData
+    {
+        public float Gold { get; set; }
+        public int Role { get; set; }
+        public required Dictionary<int, int> Inventory { get; set; } // Index -> Count
     }
 }

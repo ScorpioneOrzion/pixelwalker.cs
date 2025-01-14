@@ -28,14 +28,15 @@ Dictionary<string, DigbotPlayerRole> SetRoles = new()
     { "REALMS", DigbotPlayerRole.Immune },
 };
 
-var players = new Dictionary<string, DigbotPlayer> { };
-
 Registry.Initialize();
 
-Action<PixelPilotClient, string, int> SendPrivateMessage = (client, message, playerId) =>
-{
-    client.Send(new PlayerDirectMessagePacket() { Message = message, TargetPlayerId = playerId });
-};
+string saveURL = "digbot";
+var players = Registry.LoadAllPlayers(File.ReadAllText($"{saveURL}.json"));
+
+Console.WriteLine(Registry.Items.Keys);
+
+Action<PixelPilotClient, string, int> SDM = (c, m, p) =>
+    c.Send(new PlayerChatPacket() { Message = $"/dm #{p} {m}" });
 
 Dictionary<string, DigbotCommand> lobbyCommands = [];
 
@@ -45,6 +46,11 @@ foreach (var command in Registry.Commands)
     {
         lobbyCommands.Add(command.Key, command.Value);
     }
+}
+
+void AddPlayer(string Username, DigbotPlayerRole role)
+{
+    players.Add(Username, new DigbotPlayer(1) { Role = role });
 }
 
 (PixelPilotClient, string joinKey) SetupWorld()
@@ -63,19 +69,9 @@ foreach (var command in Registry.Commands)
     {
         if (players.ContainsKey(player.Username)) { }
         else if (SetRoles.TryGetValue(player.Username.ToUpper(), out var role))
-        {
-            players.Add(
-                player.Username,
-                new DigbotPlayer() { Username = player.Username, Role = role }
-            );
-        }
+            AddPlayer(player.Username, role);
         else
-        {
-            players.Add(
-                player.Username,
-                new DigbotPlayer() { Role = DigbotPlayerRole.None, Username = player.Username }
-            );
-        }
+            AddPlayer(player.Username, DigbotPlayerRole.None);
     };
 
     client.OnPacketReceived += (_, packet) =>
@@ -103,8 +99,18 @@ foreach (var command in Registry.Commands)
 
                 if (args.Length < 1)
                     return;
-                Console.WriteLine(args[0]);
-                Console.WriteLine(playerObj.Role);
+
+                if (
+                    playerObj.Role is DigbotPlayerRole.Owner
+                    && args[0].Equals("save", StringComparison.CurrentCultureIgnoreCase)
+                )
+                {
+                    Registry.SaveFile(saveURL, players);
+
+                    SDM(client, "saved", playerId.Value);
+
+                    return;
+                }
 
                 if (lobbyCommands.TryGetValue(args[0].ToLower(), out var command))
                 {
@@ -120,7 +126,7 @@ foreach (var command in Registry.Commands)
                     }
                     else
                     {
-                        SendPrivateMessage(
+                        SDM(
                             client,
                             "That command can't be used in this world or you don't have permission",
                             playerId.Value
@@ -130,7 +136,7 @@ foreach (var command in Registry.Commands)
                 else
                 {
                     Console.WriteLine("Command not found");
-                    SendPrivateMessage(
+                    SDM(
                         client,
                         "That command can't be used in this world or you don't have permission",
                         playerId.Value
@@ -162,23 +168,10 @@ foreach (var command in Registry.Commands)
     playerManager.OnPlayerJoined += (_, player) =>
     {
         if (players.ContainsKey(player.Username)) { }
+        else if (SetRoles.TryGetValue(player.Username.ToUpper(), out var role))
+            AddPlayer(player.Username, role);
         else
-        {
-            if (SetRoles.TryGetValue(player.Username.ToUpper(), out var role))
-            {
-                players.Add(
-                    player.Username,
-                    new DigbotPlayer() { Username = player.Username, Role = role }
-                );
-            }
-            else
-            {
-                players.Add(
-                    player.Username,
-                    new DigbotPlayer() { Role = DigbotPlayerRole.None, Username = player.Username }
-                );
-            }
-        }
+            AddPlayer(player.Username, DigbotPlayerRole.None);
     };
 
     client.OnClientConnected += (_) =>
@@ -255,6 +248,17 @@ foreach (var command in Registry.Commands)
                 if (args.Length < 1)
                     return;
 
+                if (
+                    playerObj.Role is DigbotPlayerRole.Owner
+                    && args[0].Equals("save", StringComparison.CurrentCultureIgnoreCase)
+                )
+                {
+                    Registry.SaveFile(saveURL, players);
+
+                    SDM(client, "saved", playerId.Value);
+                    return;
+                }
+
                 if (worldTemplate.Commands.TryGetValue(args[0].ToLower(), out var command))
                 {
                     if (command.Roles.Contains(playerObj.Role))
@@ -269,7 +273,7 @@ foreach (var command in Registry.Commands)
                     }
                     else
                     {
-                        SendPrivateMessage(
+                        SDM(
                             client,
                             "That command can't be used in this world or you don't have permission",
                             playerId.Value
@@ -278,7 +282,7 @@ foreach (var command in Registry.Commands)
                 }
                 else
                 {
-                    SendPrivateMessage(
+                    SDM(
                         client,
                         "That command can't be used in this world or you don't have permission",
                         playerId.Value
@@ -482,6 +486,8 @@ while (isRunning)
     // Check for active clients at the specified interval
     if (stopwatch.Elapsed >= checkInterval)
     {
+        Registry.SaveFile(saveURL, players);
+
         lock (activeClients)
         {
             if (activeClients.Count == 0)
