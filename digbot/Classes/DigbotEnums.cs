@@ -2,9 +2,12 @@ namespace digbot.Classes
 {
     public enum DigbotPlayerRole
     {
-        None, // default role
-        Immune, // for players who created the game or for bots that are used by those players
-        Owner, // for the player who created the bot or the bot itself
+        None,
+        GameBot,
+        GameDeveloper,
+        GameAdmin,
+        DIGBOT,
+        Owner,
     }
 
     public enum ActionType

@@ -7,56 +7,86 @@ namespace digbot.Classes
 {
     public class Registry
     {
-        public static void SaveFile(string saveUrl, Dictionary<string, DigbotPlayer> players)
+        private static Dictionary<string, DigbotPlayerRole> setRoles = new()
         {
-            string timestampedFile = $"{saveUrl}_{DateTime.UtcNow:yyyyMMddHHmmss}.json";
-            File.WriteAllText(timestampedFile, SaveAllPlayers(players));
-            File.Replace(timestampedFile, $"{saveUrl}.json", null);
-        }
+            { "DIGBOT", DigbotPlayerRole.DIGBOT },
+            { "SCORPIONEORZION", DigbotPlayerRole.Owner },
+            { "MARTEN", DigbotPlayerRole.GameDeveloper },
+            { "JOHN", DigbotPlayerRole.GameAdmin },
+            { "ANATOLY", DigbotPlayerRole.GameDeveloper },
+            { "PRIDDLE", DigbotPlayerRole.GameAdmin },
+            { "REALMS", DigbotPlayerRole.GameBot },
+        };
 
-        public static string SaveAllPlayers(Dictionary<string, DigbotPlayer> players)
+        public static void SaveFileJson(Dictionary<string, DigbotPlayer> players)
         {
+            var usedItemKeys = players.Values.SelectMany(p => p.Inventory.Keys).Distinct().ToList();
+
             var playersToSerialize = players.ToDictionary(
-                kvp => kvp.Key, // Player ID (key)
+                kvp => kvp.Key,
                 kvp => new
                 {
                     kvp.Value.Gold,
-                    kvp.Value.Role,
                     Inventory = kvp.Value.Inventory.ToDictionary(
-                        itemKvp => Registry.OrderedKeys.IndexOf(itemKvp.Key), // Convert item keys to indices
-                        itemKvp => itemKvp.Value // Keep counts
+                        itemKvp => usedItemKeys.IndexOf(itemKvp.Key),
+                        itemKvp => itemKvp.Value
                     ),
                 }
             );
 
-            return JsonSerializer.Serialize(playersToSerialize);
+            var saveData = new { UsedItemKeys = usedItemKeys, Players = playersToSerialize };
+
+            string timestampedFile = $"digbot_{DateTime.UtcNow:yyyyMMddHHmmss}.json";
+            string json = JsonSerializer.Serialize(saveData);
+            File.WriteAllText(timestampedFile, json);
+            File.Replace(timestampedFile, "digbot.json", null);
         }
 
-        public static Dictionary<string, DigbotPlayer> LoadAllPlayers(string json)
+        public static Dictionary<string, DigbotPlayer> LoadFileJson(string filePath)
         {
-            var data = JsonSerializer.Deserialize<Dictionary<string, SaveData>>(json);
+            var json = File.ReadAllText(filePath);
+            var saveData = JsonSerializer.Deserialize<SaveData>(json);
 
             var players = new Dictionary<string, DigbotPlayer>();
 
-            if (data != null)
-                foreach (var kvp in data)
+            if (saveData != null)
+                foreach (var kvp in saveData.Players)
                 {
-                    // Convert indices back to keys in the inventory
                     var inventory = kvp.Value.Inventory.ToDictionary(
-                        itemKvp => Registry.OrderedKeys[itemKvp.Key], // Map index to key
-                        itemKvp => itemKvp.Value // Keep counts
+                        itemKvp => saveData.UsedItemKeys[itemKvp.Key], // Map index to item key
+                        itemKvp => itemKvp.Value
                     );
 
-                    // Recreate the player object
-                    var player = new DigbotPlayer(inventory, kvp.Value.Gold)
+                    DigbotPlayer player;
+
+                    if (SetRoles.TryGetValue(kvp.Key, out var role))
                     {
-                        Role = (DigbotPlayerRole)kvp.Value.Role,
-                    };
+                        player = new DigbotPlayer(inventory, kvp.Value.Gold) { Role = role };
+                    }
+                    else
+                    {
+                        player = new DigbotPlayer(inventory, kvp.Value.Gold)
+                        {
+                            Role = DigbotPlayerRole.None,
+                        };
+                    }
 
                     players[kvp.Key] = player;
                 }
 
             return players;
+        }
+
+        public class SaveData
+        {
+            public required List<string> UsedItemKeys { get; set; }
+            public required Dictionary<string, PlayerData> Players { get; set; }
+        }
+
+        public class PlayerData
+        {
+            public float Gold { get; set; }
+            public required Dictionary<int, int> Inventory { get; set; } // Inventory using indices
         }
 
         private static readonly Action<PixelPilotClient, string, int> SDM = (c, m, p) =>
@@ -71,7 +101,7 @@ namespace digbot.Classes
                     {
                         world.Reset(client);
                     },
-                    Roles = [DigbotPlayerRole.Owner],
+                    Role = DigbotPlayerRole.Owner,
                 }
             },
             {
@@ -83,9 +113,7 @@ namespace digbot.Classes
                         if (args.Length == 0)
                         {
                             var commands = world
-                                .Commands.Where(command =>
-                                    command.Value.Roles.Contains(player.Role)
-                                )
+                                .Commands.Where(command => command.Value.Role <= player.Role)
                                 .Select(command => command.Key);
                             var commandsList = string.Join(", ", commands);
                             SDM(client, commandsList, playerObj.id);
@@ -102,8 +130,7 @@ namespace digbot.Classes
                             }
                             var commands = Commands
                                 .Where(command =>
-                                    command.Value.Roles.Contains(player.Role)
-                                    && command.Value.LobbyCommand
+                                    command.Value.Role <= player.Role && command.Value.LobbyCommand
                                 )
                                 .Select(command => command.Key);
                             var commandsList = string.Join(", ", commands);
@@ -120,7 +147,12 @@ namespace digbot.Classes
                     {
                         client.Disconnect();
                     },
-                    Roles = [DigbotPlayerRole.Owner],
+                    LobbyCommand = true,
+                    LobbyExecute = (args, player, playerObj, lobby) =>
+                    {
+                        lobby.Disconnect();
+                    },
+                    Role = DigbotPlayerRole.Owner,
                 }
             },
             {
@@ -374,6 +406,11 @@ namespace digbot.Classes
 
         public static readonly Dictionary<string, DigbotItem> Items = [];
         public static List<string> OrderedKeys => [.. Items.Keys.OrderBy(key => key)];
+
+        public static Dictionary<string, DigbotPlayerRole> SetRoles
+        {
+            get => setRoles;
+        }
 
         public static void Initialize()
         {

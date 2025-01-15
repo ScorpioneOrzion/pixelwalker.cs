@@ -150,12 +150,7 @@ namespace digbot.Classes
             DigbotWorld
         > Execute;
 
-        public DigbotPlayerRole[] Roles =
-        [
-            DigbotPlayerRole.None,
-            DigbotPlayerRole.Immune,
-            DigbotPlayerRole.Owner,
-        ];
+        public DigbotPlayerRole Role = DigbotPlayerRole.None;
         public bool LobbyCommand = false;
         public Action<
             string[],

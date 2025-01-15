@@ -338,56 +338,9 @@ namespace digbot.Classes
             RandomGenerator = new Random((int)DateTime.Now.Ticks ^ this.GetHashCode());
         }
 
-        public string Save
-        {
-            get
-            {
-                var inventoryToSerialize = Inventory.ToDictionary(
-                    kvp => Registry.OrderedKeys.IndexOf(kvp.Key),
-                    kvp => kvp.Value
-                );
-
-                return JsonSerializer.Serialize(
-                    new
-                    {
-                        Gold,
-                        Role,
-                        Inventory = inventoryToSerialize,
-                    }
-                );
-            }
-        }
-
-        public static DigbotPlayer Load(string json)
-        {
-            // Deserialize the JSON string
-            var data = JsonSerializer.Deserialize<SaveData>(json);
-
-            if (data is null)
-            {
-                return new() { Role = DigbotPlayerRole.None };
-            }
-
-            // Map the indices back to the keys in the registry
-            var inventory = data.Inventory.ToDictionary(
-                kvp => Registry.OrderedKeys[kvp.Key], // Lookup key by index
-                kvp => kvp.Value // Retain the count
-            );
-
-            // Construct and return the DigbotPlayer object
-            return new DigbotPlayer(inventory, data.Gold) { Role = (DigbotPlayerRole)data.Role };
-        }
-
         public int GetRandomInt(int min, int max)
         {
             return RandomGenerator.Next(min, max);
         }
-    }
-
-    public class SaveData
-    {
-        public float Gold { get; set; }
-        public int Role { get; set; }
-        public required Dictionary<int, int> Inventory { get; set; } // Index -> Count
     }
 }
