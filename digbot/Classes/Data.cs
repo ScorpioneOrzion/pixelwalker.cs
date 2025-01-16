@@ -7,7 +7,7 @@ namespace digbot.Classes
 {
     public class Registry
     {
-        private static Dictionary<string, DigbotPlayerRole> setRoles = new()
+        private static readonly Dictionary<string, DigbotPlayerRole> setRoles = new()
         {
             { "DIGBOT", DigbotPlayerRole.DIGBOT },
             { "SCORPIONEORZION", DigbotPlayerRole.Owner },
@@ -20,7 +20,11 @@ namespace digbot.Classes
 
         public static void SaveFileJson(Dictionary<string, DigbotPlayer> players)
         {
-            var usedItemKeys = players.Values.SelectMany(p => p.Inventory.Keys).Distinct().ToList();
+            var usedItemKeys = players
+                .Values.SelectMany(p => p.Inventory.Keys)
+                .Select(p => p.ItemKey)
+                .Distinct()
+                .ToList();
 
             var playersToSerialize = players.ToDictionary(
                 kvp => kvp.Key,
@@ -28,7 +32,7 @@ namespace digbot.Classes
                 {
                     kvp.Value.Gold,
                     Inventory = kvp.Value.Inventory.ToDictionary(
-                        itemKvp => usedItemKeys.IndexOf(itemKvp.Key),
+                        itemKvp => usedItemKeys.IndexOf(itemKvp.Key.ItemKey),
                         itemKvp => itemKvp.Value
                     ),
                 }
@@ -53,7 +57,7 @@ namespace digbot.Classes
                 foreach (var kvp in saveData.Players)
                 {
                     var inventory = kvp.Value.Inventory.ToDictionary(
-                        itemKvp => saveData.UsedItemKeys[itemKvp.Key], // Map index to item key
+                        itemKvp => Items[saveData.UsedItemKeys[itemKvp.Key]], // Map index to item key
                         itemKvp => itemKvp.Value
                     );
 
@@ -89,9 +93,11 @@ namespace digbot.Classes
             public required Dictionary<int, int> Inventory { get; set; } // Inventory using indices
         }
 
-        private static readonly Action<PixelPilotClient, string, int> SDM = (c, m, p) =>
+        public static readonly Action<PixelPilotClient, string, int> SDM = (c, m, p) =>
             c.Send(new PlayerChatPacket() { Message = $"/dm #{p} {m}" });
-        public static readonly CaseInsensitiveDictionary<DigbotCommand> Commands = new()
+        public static readonly Dictionary<string, DigbotCommand> Commands = new(
+            StringComparer.OrdinalIgnoreCase
+        )
         {
             {
                 "reset",
@@ -174,7 +180,7 @@ namespace digbot.Classes
                         if (
                             Items.TryGetValue(args[0], out DigbotItem? item)
                             && item is not null
-                            && entity.Inventory.ContainsKey(item.Key)
+                            && entity.Inventory.ContainsKey(item)
                         )
                         {
                             result = item.Use(entity, ActionType.Use, playerObj.position);
@@ -202,7 +208,7 @@ namespace digbot.Classes
                         if (
                             Items.TryGetValue(args[0], out DigbotItem? item)
                             && item is not null
-                            && entity.Inventory.ContainsKey(item.Key)
+                            && entity.Inventory.ContainsKey(item)
                         )
                         {
                             result = item.Use(entity, ActionType.Equip, playerObj.position);
@@ -214,6 +220,88 @@ namespace digbot.Classes
                                 SDM(
                                     client,
                                     "You can't equip that, unequip something first",
+                                    playerObj.id
+                                );
+                            }
+                        }
+                    },
+                }
+            },
+            {
+                "craft",
+                new()
+                {
+                    Execute = (args, player, playerObj, client, world) =>
+                    {
+                        if (
+                            player is not DigbotPlayer playerEntity
+                            || Items is null
+                            || args.Length == 0
+                            || string.IsNullOrWhiteSpace(args[0])
+                        )
+                        {
+                            return;
+                        }
+
+                        var item = Items.Values.FirstOrDefault(i =>
+                            i.Name.Equals(args[0], StringComparison.CurrentCultureIgnoreCase)
+                        );
+                        if (item is null || item.Hidden)
+                        {
+                            SDM(client, "Unknown item", playerObj.id);
+                            return;
+                        }
+
+                        if (!item.CraftAble)
+                        {
+                            SDM(client, "You can't craft that item", playerObj.id);
+                            return;
+                        }
+
+                        bool canCraft = true;
+                        List<(DigbotItem Item, int MissingAmount)> missingItems = [];
+
+                        (DigbotItem, int)[] costs = item.Craft;
+
+                        foreach (var (itemPart, amount) in costs)
+                        {
+                            if (
+                                !playerEntity.Inventory.TryGetValue(itemPart, out int currentAmount)
+                                || currentAmount < amount
+                            )
+                            {
+                                int missingAmount =
+                                    amount - (currentAmount >= 0 ? currentAmount : 0); // Calculate missing amount
+                                missingItems.Add((itemPart, missingAmount));
+                                canCraft = false;
+                            }
+                        }
+
+                        if (canCraft)
+                        {
+                            foreach (var (itemPart, amount) in costs)
+                            {
+                                playerEntity.Inventory[itemPart] -= amount;
+                            }
+                            SDM(
+                                client,
+                                $"Crafting successful! You crafted: {item.Name}",
+                                playerObj.id
+                            );
+                            playerEntity.Inventory[item]++;
+                        }
+                        else
+                        {
+                            SDM(
+                                client,
+                                "Crafting failed. You are missing the following items:",
+                                playerObj.id
+                            );
+                            foreach (var (missingItem, missingAmount) in missingItems)
+                            {
+                                SDM(
+                                    client,
+                                    $"{missingAmount} x {Items.Values.FirstOrDefault(i => i.Name.Equals(missingItem.Name, StringComparison.CurrentCultureIgnoreCase))}",
                                     playerObj.id
                                 );
                             }
@@ -237,17 +325,14 @@ namespace digbot.Classes
                             return;
                         }
 
-                        if (
-                            !Items.TryGetValue(args[0], out DigbotItem? item)
-                            || item is null
-                            || item.Hidden
-                        )
+                        var item = Items.Values.FirstOrDefault(i => i.Name == args[0]);
+                        if (item is null || item.Hidden)
                         {
                             SDM(client, "Unknown item", playerObj.id);
                             return;
                         }
 
-                        if (!item.Buyable)
+                        if (!item.BuyAble)
                         {
                             SDM(client, "You can't sell that item", playerObj.id);
                             return;
@@ -280,26 +365,20 @@ namespace digbot.Classes
                             return;
                         }
 
-                        if (
-                            !Items.TryGetValue(args[0], out DigbotItem? item)
-                            || item is null
-                            || item.Hidden
-                        )
+                        var item = Items.Values.FirstOrDefault(i => i.Name == args[0]);
+                        if (item is null || item.Hidden)
                         {
                             SDM(client, "Unknown item", playerObj.id);
                             return;
                         }
 
-                        if (!item.Buyable)
+                        if (!item.BuyAble)
                         {
                             SDM(client, "You can't sell that item", playerObj.id);
                             return;
                         }
 
-                        if (
-                            !playerEntity.Inventory.ContainsKey(item.Key)
-                            || playerEntity.Inventory[item.Key] <= 0
-                        )
+                        if (!playerEntity.Inventory.TryGetValue(item, out int value) || value <= 0)
                         {
                             SDM(client, "You don't have that item", playerObj.id);
                             return;
@@ -321,7 +400,9 @@ namespace digbot.Classes
                 new() { Execute = (args, player, playerObj, client, world) => { } }
             },
         };
-        public static readonly CaseInsensitiveDictionary<DigbotWorld> Worlds = new()
+        public static readonly Dictionary<string, DigbotWorld> Worlds = new(
+            StringComparer.OrdinalIgnoreCase
+        )
         {
             {
                 "core",
@@ -404,8 +485,9 @@ namespace digbot.Classes
             },
         };
 
-        public static readonly Dictionary<string, DigbotItem> Items = [];
-        public static List<string> OrderedKeys => [.. Items.Keys.OrderBy(key => key)];
+        public static readonly Dictionary<string, DigbotItem> Items = new(
+            StringComparer.OrdinalIgnoreCase
+        );
 
         public static Dictionary<string, DigbotPlayerRole> SetRoles
         {
@@ -430,7 +512,7 @@ namespace digbot.Classes
             AddItem(
                 new HiddenDigbotItem()
                 {
-                    Key = "AbsoluteStrength",
+                    ItemKey = "AbsoluteStrength",
                     Use = (entity, action, position) =>
                     {
                         return action switch
@@ -447,7 +529,7 @@ namespace digbot.Classes
             AddItem(
                 new HiddenDigbotItem()
                 {
-                    Key = "RelativeStrength",
+                    ItemKey = "RelativeStrength",
                     Use = (entity, action, position) =>
                     {
                         return action switch
@@ -464,7 +546,7 @@ namespace digbot.Classes
             AddItem(
                 new HiddenDigbotItem()
                 {
-                    Key = "AbsoluteLuck",
+                    ItemKey = "AbsoluteLuck",
                     Use = (entity, action, position) =>
                     {
                         return action switch
@@ -481,7 +563,7 @@ namespace digbot.Classes
             AddItem(
                 new HiddenDigbotItem()
                 {
-                    Key = "RelativeLuck",
+                    ItemKey = "RelativeLuck",
                     Use = (entity, action, position) =>
                     {
                         return action switch
@@ -498,7 +580,7 @@ namespace digbot.Classes
             AddItem(
                 new HiddenDigbotItem()
                 {
-                    Key = "AbsolutePerception",
+                    ItemKey = "AbsolutePerception",
                     Use = (entity, action, position) =>
                     {
                         return action switch
@@ -515,7 +597,7 @@ namespace digbot.Classes
             AddItem(
                 new HiddenDigbotItem()
                 {
-                    Key = "RelativePerception",
+                    ItemKey = "RelativePerception",
                     Use = (entity, action, position) =>
                     {
                         return action switch
@@ -548,7 +630,7 @@ namespace digbot.Classes
                 AddItem(
                     new()
                     {
-                        Key = $"{oreNames[i]}Ore",
+                        ItemKey = $"{oreNames[i]}Ore",
                         Name = $"{Capitalize(oreNames[i])} Ore",
                         Description = $"A chunk of {oreNames[i]} ore",
                         Cost = 5f,
@@ -559,7 +641,7 @@ namespace digbot.Classes
                 AddItem(
                     new()
                     {
-                        Key = $"{oreNames[i]}Ingot",
+                        ItemKey = $"{oreNames[i]}Ingot",
                         Name = $"{Capitalize(oreNames[i])} Ingot",
                         Description = $"A bar of {oreNames[i]} ingot",
                         Cost = 10f,
@@ -570,7 +652,7 @@ namespace digbot.Classes
             AddItem(
                 new()
                 {
-                    Key = "Coal",
+                    ItemKey = "Coal",
                     Name = "Coal",
                     Description = "A chunk of coal",
                     Cost = 1f,
@@ -582,9 +664,13 @@ namespace digbot.Classes
 
         private static void AddItem(DigbotItem item)
         {
-            if (Items.ContainsKey(item.Key))
-                return;
-            Items.Add(item.Key, item);
+            if (item == null || string.IsNullOrWhiteSpace(item.ItemKey))
+                throw new ArgumentException("Invalid item or ItemKey");
+
+            if (!Items.ContainsKey(item.ItemKey))
+            {
+                Items.Add(item.ItemKey, item);
+            }
         }
 
         private static void AddPickaxe(
@@ -595,12 +681,12 @@ namespace digbot.Classes
             int typeUse = 1
         )
         {
-            DigbotItem unequippedItem = new() { Type = type, Key = unequippedName };
+            DigbotItem unequippedItem = new() { Type = type, ItemKey = unequippedName };
             DigbotItem equippedItem = new()
             {
                 Type = type,
                 TypeUse = typeUse,
-                Key = equippedName,
+                ItemKey = equippedName,
             };
 
             unequippedItem.Use += (player, action, position) =>
@@ -643,12 +729,12 @@ namespace digbot.Classes
             int typeUse = 1
         )
         {
-            DigbotItem unequippedItem = new() { Type = type, Key = unequippedName };
+            DigbotItem unequippedItem = new() { Type = type, ItemKey = unequippedName };
             DigbotItem equippedItem = new()
             {
                 Type = type,
                 TypeUse = typeUse,
-                Key = equippedName,
+                ItemKey = equippedName,
             };
 
             unequippedItem.Use += (player, action, position) =>

@@ -202,7 +202,7 @@ namespace digbot.Classes
 
     public class DigbotItem
     {
-        public required string Key;
+        public required string ItemKey;
         public string Name = "";
         public string Description = "";
         public ItemLimits ItemLimits = new();
@@ -210,7 +210,9 @@ namespace digbot.Classes
         public float Cost = 0f;
         public ItemType Type = default;
         public bool Hidden = false;
-        public bool Buyable => Cost != 0f || Hidden == true;
+        public (DigbotItem, int)[] Craft = [];
+        public bool BuyAble => Cost != 0f && Hidden == false;
+        public bool CraftAble => Craft.Length > 0 && Hidden == false;
         public Func<Entity, ActionType, (int x, int y)?, (Stats, List<string>)?> Use = (
             entity,
             action,
@@ -222,7 +224,7 @@ namespace digbot.Classes
 
         public void Buy(Entity player, string amount)
         {
-            if (!Buyable)
+            if (!BuyAble)
                 return;
             if (amount == "all")
                 Buy(player, (int)Math.Floor(player.Gold / Cost));
@@ -234,20 +236,20 @@ namespace digbot.Classes
         {
             if (amount <= 0)
                 return;
-            if (!Buyable)
+            if (!BuyAble)
                 return;
             if (player.Gold < Cost * amount)
                 return;
-            player.SetItems(Key, amount);
+            player.SetItems(ItemKey, amount);
             player.Gold -= Cost * amount;
         }
 
         public void Sell(Entity player, string amount)
         {
-            if (!Buyable)
+            if (!BuyAble)
                 return;
             if (amount == "all")
-                Sell(player, player.Inventory[Key]);
+                Sell(player, player.Inventory[this]);
             else if (int.TryParse(amount, out int num))
                 Sell(player, num);
         }
@@ -256,13 +258,13 @@ namespace digbot.Classes
         {
             if (amount <= 0)
                 return;
-            if (!Buyable)
+            if (!BuyAble)
                 return;
-            if (!player.Inventory.ContainsKey(Key))
+            if (!player.Inventory.ContainsKey(this))
                 return;
-            if (player.Inventory[Key] < amount)
-                amount = player.Inventory[Key];
-            player.SetItems(Key, -amount);
+            if (player.Inventory[this] < amount)
+                amount = player.Inventory[this];
+            player.SetItems(ItemKey, -amount);
             player.Gold += Cost * amount * 0.9f;
         }
     }
@@ -282,17 +284,15 @@ namespace digbot.Classes
     {
         public float Gold = default;
         public ItemLimits ItemLimits { get; private set; } = new();
-        public Dictionary<string, int> Inventory = [];
+        public Dictionary<DigbotItem, int> Inventory = [];
 
         public (Stats, List<string>) Use(ActionType action, (int x, int y)? position)
         {
             Stats totalStats = new();
             List<string> messages = [];
 
-            foreach (var (key, count) in Inventory)
+            foreach (var (item, count) in Inventory)
             {
-                DigbotItem item = Registry.Items[key];
-
                 var result = item.Use(this, action, position); // Get the result from the item
 
                 // If the result is not null and contains Stats and messages
@@ -308,15 +308,16 @@ namespace digbot.Classes
 
         public void SetItems(DigbotItem item, int amount = 0)
         {
-            SetItems(item.Key, amount);
-        }
-
-        public void SetItems(string item, int amount = 0)
-        {
             if (Inventory.ContainsKey(item))
                 Inventory[item] += amount;
             else
                 Inventory[item] = amount;
+            SetItems(item.ItemKey, amount);
+        }
+
+        public void SetItems(string item, int amount = 0)
+        {
+            SetItems(Registry.Items[item], amount);
         }
     }
 
@@ -331,7 +332,7 @@ namespace digbot.Classes
             RandomGenerator = new Random((int)DateTime.Now.Ticks ^ this.GetHashCode());
         }
 
-        public DigbotPlayer(Dictionary<string, int> inventory, float gold)
+        public DigbotPlayer(Dictionary<DigbotItem, int> inventory, float gold)
         {
             Inventory = inventory;
             Gold = gold;

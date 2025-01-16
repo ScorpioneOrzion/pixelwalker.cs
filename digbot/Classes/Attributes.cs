@@ -44,7 +44,7 @@ namespace digbot.Classes
             int weight,
             Func<DigbotPlayer, (int x, int y), bool> condition
         )> Blocks;
-        public required CaseInsensitiveDictionary<DigbotCommand> Commands;
+        public required Dictionary<string, DigbotCommand> Commands;
 
         public bool Inside(int x, int y)
         {
@@ -158,13 +158,5 @@ namespace digbot.Classes
             (int id, (int x, int y) position),
             PixelPilotClient
         > LobbyExecute = (args, player, playerId, lobby) => { };
-    }
-
-    public class CaseInsensitiveDictionary<TValue> : Dictionary<string, TValue>
-    {
-        public new void Add(string key, TValue value)
-        {
-            base.Add(key.ToLower(), value);
-        }
     }
 }

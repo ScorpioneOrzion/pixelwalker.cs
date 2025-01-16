@@ -22,9 +22,6 @@ Registry.Initialize();
 string saveURL = "digbot";
 var players = Registry.LoadFileJson($"{saveURL}.json");
 
-Action<PixelPilotClient, string, int> SDM = (c, m, p) => // SendDirectMessage
-    c.Send(new PlayerChatPacket() { Message = $"/dm #{p} {m}" });
-
 Dictionary<string, DigbotCommand> lobbyCommands = [];
 
 foreach (var command in Registry.Commands)
@@ -97,7 +94,7 @@ void AddPlayer(string Username, DigbotPlayerRole role)
                 {
                     Registry.SaveFileJson(players);
 
-                    SDM(client, "saved", playerId.Value);
+                    Registry.SDM(client, "saved", playerId.Value);
 
                     return;
                 }
@@ -117,7 +114,7 @@ void AddPlayer(string Username, DigbotPlayerRole role)
                 else
                 {
                     Console.WriteLine("Command not found");
-                    SDM(
+                    Registry.SDM(
                         client,
                         "That command can't be used in this world or you don't have permission",
                         playerId.Value
@@ -239,7 +236,7 @@ void AddPlayer(string Username, DigbotPlayerRole role)
                 {
                     Registry.SaveFileJson(players);
 
-                    SDM(client, "saved", playerId.Value);
+                    Registry.SDM(client, "saved", playerId.Value);
 
                     return;
                 }
@@ -259,7 +256,7 @@ void AddPlayer(string Username, DigbotPlayerRole role)
                 }
                 else
                 {
-                    SDM(
+                    Registry.SDM(
                         client,
                         "That command can't be used in this world or you don't have permission",
                         playerId.Value
@@ -395,7 +392,7 @@ void AddPlayer(string Username, DigbotPlayerRole role)
 }
 
 var activeClients = new List<PixelPilotClient>();
-CaseInsensitiveDictionary<DigbotWorld> worlds = Registry.Worlds;
+Dictionary<string, DigbotWorld> worlds = Registry.Worlds;
 
 var (client, joinKey) = SetupWorld();
 bool isRunning = true;
