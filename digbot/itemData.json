@@ -1,0 +1,217 @@
+{
+	"tools": [
+		{
+			"itemKey": "pickaxeBase",
+			"type": "Mine",
+			"cost": 0,
+			"equip": 1,
+			"strength": 1,
+			"starting": 1,
+			"useCost": 0,
+			"craftingRecipe": []
+		},
+		{
+			"itemKey": "pickaxe0",
+			"type": "Mine",
+			"cost": 100,
+			"equip": 1,
+			"strength": 1,
+			"starting": 0,
+			"useCost": 0,
+			"craftingRecipe": []
+		},
+		{
+			"itemKey": "pickaxe1",
+			"type": "Mine",
+			"cost": 0,
+			"equip": 2,
+			"strength": 2.25,
+			"starting": 0,
+			"useCost": 0,
+			"craftingRecipe": [
+				{
+					"itemKey": "pickaxe0",
+					"quantity": 2
+				}
+			]
+		},
+		{
+			"itemKey": "pickaxe2",
+			"type": "Mine",
+			"cost": 0,
+			"equip": 3,
+			"strength": 3.5,
+			"starting": 0,
+			"useCost": 0,
+			"craftingRecipe": [
+				{
+					"itemKey": "pickaxe0",
+					"quantity": 1
+				},
+				{
+					"itemKey": "pickaxe1",
+					"quantity": 1
+				}
+			]
+		},
+		{
+			"itemKey": "pickaxe3",
+			"type": "Mine",
+			"cost": 0,
+			"equip": 5,
+			"strength": 6,
+			"starting": 0,
+			"useCost": 0,
+			"craftingRecipe": [
+				{
+					"itemKey": "pickaxe1",
+					"quantity": 1
+				},
+				{
+					"itemKey": "pickaxe2",
+					"quantity": 1
+				}
+			]
+		},
+		{
+			"itemKey": "pickaxe4",
+			"type": "Mine",
+			"cost": 0,
+			"equip": 8,
+			"strength": 9.75,
+			"starting": 0,
+			"useCost": 0,
+			"craftingRecipe": [
+				{
+					"itemKey": "pickaxe2",
+					"quantity": 1
+				},
+				{
+					"itemKey": "pickaxe3",
+					"quantity": 1
+				}
+			]
+		},
+		{
+			"itemKey": "pickaxe5",
+			"type": "Mine",
+			"cost": 0,
+			"equip": 13,
+			"strength": 16,
+			"starting": 0,
+			"useCost": 0,
+			"craftingRecipe": [
+				{
+					"itemKey": "pickaxe3",
+					"quantity": 1
+				},
+				{
+					"itemKey": "pickaxe4",
+					"quantity": 1
+				}
+			]
+		},
+		{
+			"itemKey": "drill0",
+			"type": "Drill",
+			"cost": 100,
+			"strength": 2,
+			"equip": 1,
+			"starting": 0,
+			"useCost": 4,
+			"craftingRecipe": []
+		},
+		{
+			"itemKey": "drill1",
+			"type": "Drill",
+			"cost": 0,
+			"strength": 4.5,
+			"equip": 2,
+			"starting": 0,
+			"useCost": 7,
+			"craftingRecipe": [
+				{
+					"itemKey": "drill0",
+					"quantity": 2
+				}
+			]
+		},
+		{
+			"itemKey": "drill2",
+			"type": "Drill",
+			"cost": 0,
+			"strength": 7,
+			"equip": 3,
+			"starting": 0,
+			"useCost": 10,
+			"craftingRecipe": [
+				{
+					"itemKey": "drill0",
+					"quantity": 1
+				},
+				{
+					"itemKey": "drill1",
+					"quantity": 1
+				}
+			]
+		},
+		{
+			"itemKey": "drill3",
+			"type": "Drill",
+			"cost": 0,
+			"strength": 12,
+			"equip": 5,
+			"starting": 0,
+			"useCost": 16,
+			"craftingRecipe": [
+				{
+					"itemKey": "drill1",
+					"quantity": 1
+				},
+				{
+					"itemKey": "drill2",
+					"quantity": 1
+				}
+			]
+		},
+		{
+			"itemKey": "drill4",
+			"type": "Drill",
+			"cost": 0,
+			"strength": 19.5,
+			"equip": 8,
+			"starting": 0,
+			"useCost": 25,
+			"craftingRecipe": [
+				{
+					"itemKey": "drill2",
+					"quantity": 1
+				},
+				{
+					"itemKey": "drill3",
+					"quantity": 1
+				}
+			]
+		},
+		{
+			"itemKey": "drill5",
+			"type": "Drill",
+			"cost": 0,
+			"strength": 32,
+			"equip": 13,
+			"starting": 0,
+			"useCost": 40,
+			"craftingRecipe": [
+				{
+					"itemKey": "drill3",
+					"quantity": 1
+				},
+				{
+					"itemKey": "drill4",
+					"quantity": 1
+				}
+			]
+		}
+	],
+	"resource": []
+}

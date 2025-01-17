@@ -9,12 +9,12 @@ namespace digbot.Classes
 {
     public class DigbotWorld(
         Func<
-            DigbotWorld,
+            PixelPilotClient,
             ActionType,
-            Actor,
+            (Actor entity, int playerId),
             PixelBlock,
-            (int x, int y, PixelBlock block, float health),
-            (PixelBlock block, float health, int x, int y)[]
+            ((int x, int y) position, PixelBlock block, float health),
+            (PixelBlock block, float health, (int x, int y) position)[]
         > UpdateFunction
     ) : Actor
     {
@@ -29,12 +29,12 @@ namespace digbot.Classes
         }
         public required int AirHeight;
         private readonly Func<
-            DigbotWorld,
+            PixelPilotClient,
             ActionType,
-            Actor,
+            (Actor entity, int playerId),
             PixelBlock,
-            (int x, int y, PixelBlock block, float health),
-            (PixelBlock block, float health, int x, int y)[]
+            ((int x, int y) position, PixelBlock block, float health),
+            (PixelBlock block, float health, (int x, int y) position)[]
         > _UpdateFunction = UpdateFunction;
         public required (PixelBlock type, float health)[,] BlockState;
         public required PixelBlock Ground;
@@ -45,6 +45,11 @@ namespace digbot.Classes
             Func<DigbotPlayer, (int x, int y), bool> condition
         )> Blocks;
         public required Dictionary<string, DigbotCommand> Commands;
+
+        public bool Inside((int x, int y) position)
+        {
+            return Inside(position.x, position.y);
+        }
 
         public bool Inside(int x, int y)
         {
@@ -62,7 +67,7 @@ namespace digbot.Classes
                 blockList.Add(
                     new PlacedBlock(x, 40, WorldLayer.Foreground, new BasicBlock(Ground))
                 );
-                ActBlock(ActionType.Reveal, this, x, 0, Ground);
+                ActBlock(client, ActionType.Reveal, (this, -1), x, 0, Ground);
             }
             client.SendRange(blockList.ToChunkedPackets());
             for (int y = 1; y < Height - AirHeight; y++)
@@ -85,49 +90,47 @@ namespace digbot.Classes
             client.SendRange(blockList.ToChunkedPackets());
         }
 
-        public (PixelBlock block, float health, int x, int y)[] ActBlock(
+        public (PixelBlock block, float health, (int x, int y) position)[] ActBlock(
+            PixelPilotClient client,
             ActionType action,
-            Actor actor,
+            (Actor entity, int playerId) actor,
             int x,
             int y,
-            PixelBlock block
+            PixelBlock newBlock
         )
         {
-            return ActBlock(action, actor, (x, y), block);
+            return ActBlock(client, action, actor, (x, y), newBlock);
         }
 
-        public (PixelBlock block, float health, int x, int y)[] ActBlock(
+        public (PixelBlock block, float health, (int x, int y) position)[] ActBlock(
+            PixelPilotClient client,
             ActionType action,
-            Actor actor,
-            (int x, int y) position,
-            PixelBlock block
+            (Actor entity, int playerId) actorInfo,
+            (int x, int y) blockCoordinates,
+            PixelBlock newBlock
         )
         {
-            if (Inside(position.x, position.y))
+            if (Inside(blockCoordinates))
             {
-                var (oldBlock, health) = GetBlock(position);
-                var result = _UpdateFunction(
-                    this,
+                var (oldBlock, currentHealth) = BlockState[blockCoordinates.x, blockCoordinates.y];
+
+                var updatedBlocks = _UpdateFunction(
+                    client,
                     action,
-                    actor,
-                    block,
-                    (position.x, position.y, oldBlock, health)
+                    actorInfo,
+                    newBlock,
+                    (blockCoordinates, oldBlock, currentHealth)
                 );
 
-                for (var i = 0; i < result.Length; i++)
+                for (var i = 0; i < updatedBlocks.Length; i++)
                 {
-                    result[i].y += AirHeight;
+                    updatedBlocks[i].position.y += AirHeight;
                 }
 
-                return result;
+                return updatedBlocks;
             }
 
             return [];
-        }
-
-        public (PixelBlock type, float health) GetBlock((int x, int y) position)
-        {
-            return GetBlock(position.x, position.y);
         }
 
         public (PixelBlock type, float health) GetBlock(int x, int y)

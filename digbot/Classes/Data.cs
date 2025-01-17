@@ -7,16 +7,20 @@ namespace digbot.Classes
 {
     public class Registry
     {
-        private static readonly Dictionary<string, DigbotPlayerRole> setRoles = new()
+        public static Dictionary<string, DigbotPlayerRole> SetRoles
         {
-            { "DIGBOT", DigbotPlayerRole.DIGBOT },
-            { "SCORPIONEORZION", DigbotPlayerRole.Owner },
-            { "MARTEN", DigbotPlayerRole.GameDeveloper },
-            { "JOHN", DigbotPlayerRole.GameAdmin },
-            { "ANATOLY", DigbotPlayerRole.GameDeveloper },
-            { "PRIDDLE", DigbotPlayerRole.GameAdmin },
-            { "REALMS", DigbotPlayerRole.GameBot },
-        };
+            get =>
+                new()
+                {
+                    { "DIGBOT", DigbotPlayerRole.DIGBOT },
+                    { "SCORPIONEORZION", DigbotPlayerRole.Owner },
+                    { "MARTEN", DigbotPlayerRole.GameDeveloper },
+                    { "JOHN", DigbotPlayerRole.GameAdmin },
+                    { "ANATOLY", DigbotPlayerRole.GameDeveloper },
+                    { "PRIDDLE", DigbotPlayerRole.GameAdmin },
+                    { "REALMS", DigbotPlayerRole.GameBot },
+                };
+        }
 
         public static void SaveFileJson(Dictionary<string, DigbotPlayer> players)
         {
@@ -176,7 +180,7 @@ namespace digbot.Classes
                         {
                             return;
                         }
-                        (Stats, List<string>)? result = null;
+                        (Stats, float, List<string>)? result = null;
                         if (
                             Items.TryGetValue(args[0], out DigbotItem? item)
                             && item is not null
@@ -185,7 +189,7 @@ namespace digbot.Classes
                         {
                             result = item.Use(entity, ActionType.Use, playerObj.position);
                         }
-                        if (result is (Stats stats, List<string> messages)) { }
+                        if (result is (Stats stats, float GoldChange, List<string> messages)) { }
                     },
                 }
             },
@@ -204,7 +208,7 @@ namespace digbot.Classes
                         {
                             return;
                         }
-                        (Stats, List<string>)? result = null;
+                        (Stats, float, List<string>)? result = null;
                         if (
                             Items.TryGetValue(args[0], out DigbotItem? item)
                             && item is not null
@@ -213,7 +217,7 @@ namespace digbot.Classes
                         {
                             result = item.Use(entity, ActionType.Equip, playerObj.position);
                         }
-                        if (result is (Stats stats, List<string> messages))
+                        if (result is (Stats stats, float GoldCost, List<string> messages))
                         {
                             if (messages.Any(message => message == "ERROR: Can't equip"))
                             {
@@ -407,19 +411,27 @@ namespace digbot.Classes
             {
                 "core",
                 new(
-                    (world, action, actor, block, blockData) =>
+                    (client, action, actorData, newBlock, blockData) =>
                     {
-                        if (actor == world)
+                        var (actor, playerId) = actorData;
+                        if (actor is DigbotWorld)
                         {
-                            return [(block, 5f * blockData.y, blockData.x, blockData.y)];
+                            return [(newBlock, 5f + blockData.position.y, blockData.position)];
                         }
                         if (actor is not Entity entity)
                         {
                             return [];
                         }
-                        var result = entity.Use(action, (blockData.x, blockData.y));
+                        var result = entity.Use(action, blockData.position);
 
-                        if (result is (Stats stats, List<string> messages)) { }
+                        if (result is (Stats stats, float goldCost, List<string> messages))
+                        {
+                            if (goldCost > entity.Gold)
+                            {
+                                SDM(client, "You don't have enough gold", playerId);
+                                return [];
+                            }
+                        }
 
                         return [];
                     }
@@ -449,19 +461,27 @@ namespace digbot.Classes
             {
                 "void",
                 new(
-                    (world, action, actor, block, blockData) =>
+                    (client, action, actorData, block, blockData) =>
                     {
-                        if (actor == world)
+                        var (actor, playerId) = actorData;
+                        if (actor is DigbotWorld)
                         {
-                            return [(block, 5f * blockData.y, blockData.x, blockData.y)];
+                            return [(block, 5f + blockData.position.y, blockData.position)];
                         }
                         if (actor is not Entity entity)
                         {
                             return [];
                         }
-                        var result = entity.Use(action, (blockData.x, blockData.y));
+                        var result = entity.Use(action, blockData.position);
 
-                        if (result is (Stats stats, List<string> messages)) { }
+                        if (result is (Stats stats, float goldCost, List<string> messages))
+                        {
+                            if (goldCost > entity.Gold)
+                            {
+                                SDM(client, "You don't have enough gold", playerId);
+                                return [];
+                            }
+                        }
 
                         return [];
                     }
@@ -489,26 +509,8 @@ namespace digbot.Classes
             StringComparer.OrdinalIgnoreCase
         );
 
-        public static Dictionary<string, DigbotPlayerRole> SetRoles
-        {
-            get => setRoles;
-        }
-
         public static void Initialize()
         {
-            AddPickaxe("pickaxe0Unequiped", "pickaxe0Equiped", ItemType.Tool, 1f, 1);
-            AddPickaxe("pickaxe1Unequiped", "pickaxe1Equiped", ItemType.Tool, 2.25f, 2);
-            AddPickaxe("pickaxe2Unequiped", "pickaxe2Equiped", ItemType.Tool, 3.5f, 3);
-            AddPickaxe("pickaxe3Unequiped", "pickaxe3Equiped", ItemType.Tool, 6.0f, 5);
-            AddPickaxe("pickaxe4Unequiped", "pickaxe4Equiped", ItemType.Tool, 9.75f, 8);
-            AddPickaxe("pickaxe5Unequiped", "pickaxe5Equiped", ItemType.Tool, 16.0f, 13);
-            AddDrill("drill0Unequiped", "drill0Equiped", ItemType.Tool, 2f, 2);
-            AddDrill("drill1Unequiped", "drill1Equiped", ItemType.Tool, 4.5f, 4);
-            AddDrill("drill2Unequiped", "drill2Equiped", ItemType.Tool, 7f, 6);
-            AddDrill("drill3Unequiped", "drill3Equiped", ItemType.Tool, 12f, 10);
-            AddDrill("drill4Unequiped", "drill4Equiped", ItemType.Tool, 19.5f, 16);
-            AddDrill("drill5Unequiped", "drill5Equiped", ItemType.Tool, 32f, 26);
-
             AddItem(
                 new HiddenDigbotItem()
                 {
@@ -519,6 +521,7 @@ namespace digbot.Classes
                         {
                             ActionType.Mine or ActionType.Drill => (
                                 new() { AbsoluteStrength = 0.01f },
+                                0,
                                 []
                             ),
                             _ => null,
@@ -536,6 +539,7 @@ namespace digbot.Classes
                         {
                             ActionType.Mine or ActionType.Drill => (
                                 new() { RelativeStrength = 0.01f },
+                                0,
                                 []
                             ),
                             _ => null,
@@ -553,6 +557,7 @@ namespace digbot.Classes
                         {
                             ActionType.Mine or ActionType.Drill => (
                                 new() { AbsoluteLuck = 0.01f },
+                                0f,
                                 []
                             ),
                             _ => null,
@@ -570,6 +575,7 @@ namespace digbot.Classes
                         {
                             ActionType.Mine or ActionType.Drill => (
                                 new() { RelativeLuck = 0.01f },
+                                0f,
                                 []
                             ),
                             _ => null,
@@ -587,6 +593,7 @@ namespace digbot.Classes
                         {
                             ActionType.Mine or ActionType.Drill => (
                                 new() { AbsolutePerception = 0.01f },
+                                0f,
                                 []
                             ),
                             _ => null,
@@ -604,6 +611,7 @@ namespace digbot.Classes
                         {
                             ActionType.Mine or ActionType.Drill => (
                                 new() { RelativePerception = 0.01f },
+                                0f,
                                 []
                             ),
                             _ => null,
@@ -622,6 +630,16 @@ namespace digbot.Classes
                 ["xenotite"] = new() { },
                 ["zorium"] = new() { },
             };
+
+            AddItem(
+                new()
+                {
+                    ItemKey = "Coal",
+                    Name = "Coal",
+                    Description = "A chunk of coal",
+                    Cost = 1f,
+                }
+            );
 
             string[] oreNames = [.. ores.Keys];
             for (int i = 0; i < oreNames.Length; i++)
@@ -645,19 +663,163 @@ namespace digbot.Classes
                         Name = $"{Capitalize(oreNames[i])} Ingot",
                         Description = $"A bar of {oreNames[i]} ingot",
                         Cost = 10f,
+                        Craft = [(Items[$"{oreNames[i]}Ore"], 1), (Items["Coal"], 1)],
                     }
                 );
             }
 
-            AddItem(
-                new()
+            var itemData = ItemRegistry.LoadGameData("itemData.json");
+
+            foreach (var tool in itemData.Tools)
+            {
+                DigbotItem unequippedItem = new()
                 {
-                    ItemKey = "Coal",
-                    Name = "Coal",
-                    Description = "A chunk of coal",
-                    Cost = 1f,
+                    ItemKey = $"{tool.ItemKey}unequipped",
+                    Type = ItemType.Tool,
+                    Cost = tool.Cost,
+                };
+                DigbotItem equippedItem = new()
+                {
+                    ItemKey = $"{tool.ItemKey}equipped",
+                    Type = ItemType.Tool,
+                    TypeUse = tool.Equip,
+                };
+
+                unequippedItem.Use += (player, action, position) =>
+                {
+                    if (action == ActionType.Equip)
+                    {
+                        if (player.ItemLimits[equippedItem.Type] < equippedItem.TypeUse)
+                        {
+                            return (new Stats(), 0f, ["ERROR: Can't equip"]);
+                        }
+                        player.SetItems(equippedItem, 1);
+                        player.SetItems(unequippedItem, -1);
+                    }
+                    return null;
+                };
+
+                equippedItem.Use += (player, action, position) =>
+                {
+                    if (action == ActionType.Equip)
+                    {
+                        player.SetItems(unequippedItem, 1);
+                        player.SetItems(equippedItem, -1);
+                        return null;
+                    }
+
+                    ActionType? requiredAction = tool.Type switch
+                    {
+                        "Mine" => ActionType.Mine,
+                        "Drill" => ActionType.Drill,
+                        _ => null,
+                    };
+
+                    if (action != requiredAction)
+                    {
+                        return null;
+                    }
+                    return (new() { AbsoluteStrength = tool.Strength }, tool.UseCost, [""]);
+                };
+            }
+        }
+
+        private static void CreateToolSet(
+            string toolNamePrefix,
+            float[] toolStrengths,
+            int[] toolUses,
+            Func<
+                Entity,
+                ActionType,
+                (int x, int y)?,
+                float,
+                int,
+                (Stats, float, List<string>)?
+            > useHandler
+        )
+        {
+            DigbotItem[] lastMade = [];
+            for (int i = 0; i < toolStrengths.Length; i++)
+            {
+                var craftingRecipe = GetCraftingRecipe(lastMade);
+
+                DigbotItem unequippedItem = new()
+                {
+                    Type = ItemType.Tool,
+                    ItemKey = $"{toolNamePrefix}{i}Unequiped",
+                    Craft = craftingRecipe,
+                    Cost = craftingRecipe.Length == 0 ? 100f : 0,
+                };
+
+                DigbotItem equippedItem = new()
+                {
+                    Type = ItemType.Tool,
+                    TypeUse = toolUses[i],
+                    ItemKey = $"{toolNamePrefix}{i}Equiped",
+                };
+
+                lastMade = [.. lastMade, unequippedItem];
+
+                // Set event handlers
+                SetUnequippedItemHandler(unequippedItem, equippedItem);
+                SetEquippedItemHandler(
+                    equippedItem,
+                    unequippedItem,
+                    toolStrengths[i],
+                    toolUses[i],
+                    useHandler
+                );
+
+                // Add items to the system
+                AddItem(unequippedItem);
+                AddItem(equippedItem);
+            }
+        }
+
+        private static (DigbotItem, int)[] GetCraftingRecipe(DigbotItem[] lastMade) =>
+            lastMade.Length switch
+            {
+                > 1 => [(lastMade[^1], 1), (lastMade[^2], 1)],
+                1 => [(lastMade[0], 2)],
+                _ => [],
+            };
+
+        private static void SetUnequippedItemHandler(DigbotItem unequipped, DigbotItem equipped)
+        {
+            unequipped.Use += (player, action, position) =>
+            {
+                if (action == ActionType.Equip)
+                {
+                    if (player.ItemLimits[equipped.Type] < equipped.TypeUse)
+                    {
+                        return (new Stats(), 0f, ["ERROR: Can't equip"]);
+                    }
+                    player.SetItems(equipped, 1);
+                    player.SetItems(unequipped, -1);
                 }
-            );
+                return null;
+            };
+        }
+
+        // Helper Method: Equipped item handler
+        private static void SetEquippedItemHandler(
+            DigbotItem equipped,
+            DigbotItem unequipped,
+            float strength,
+            int uses,
+            Func<Entity, ActionType, (int x, int y)?, float, int, (Stats, float, List<string>)?> use
+        )
+        {
+            equipped.Use += (player, action, position) =>
+            {
+                if (action == ActionType.Equip)
+                {
+                    player.SetItems(unequipped, 1);
+                    player.SetItems(equipped, -1);
+                    return null;
+                }
+                return use(player, action, position, strength, uses);
+            };
         }
 
         private static string Capitalize(string str) => $"{str[..1].ToUpper()}{str[1..]}";
@@ -667,114 +829,7 @@ namespace digbot.Classes
             if (item == null || string.IsNullOrWhiteSpace(item.ItemKey))
                 throw new ArgumentException("Invalid item or ItemKey");
 
-            if (!Items.ContainsKey(item.ItemKey))
-            {
-                Items.Add(item.ItemKey, item);
-            }
-        }
-
-        private static void AddPickaxe(
-            string unequippedName,
-            string equippedName,
-            ItemType type,
-            float powerBoost,
-            int typeUse = 1
-        )
-        {
-            DigbotItem unequippedItem = new() { Type = type, ItemKey = unequippedName };
-            DigbotItem equippedItem = new()
-            {
-                Type = type,
-                TypeUse = typeUse,
-                ItemKey = equippedName,
-            };
-
-            unequippedItem.Use += (player, action, position) =>
-            {
-                if (action == ActionType.Equip)
-                {
-                    if (player.ItemLimits[equippedItem.Type] < equippedItem.TypeUse)
-                    {
-                        return (new Stats(), ["ERROR: Can't equip"]);
-                    }
-                    player.SetItems(equippedItem, 1);
-                    player.SetItems(unequippedItem, -1);
-                }
-                return null;
-            };
-
-            equippedItem.Use += (player, action, position) =>
-            {
-                if (action == ActionType.Equip)
-                {
-                    player.SetItems(unequippedItem, 1);
-                    player.SetItems(equippedItem, -1);
-                }
-                else if (action == ActionType.Mine)
-                {
-                    return (new Stats() { AbsoluteStrength = powerBoost }, []);
-                }
-                return null;
-            };
-
-            AddItem(unequippedItem);
-            AddItem(equippedItem);
-        }
-
-        private static void AddDrill(
-            string unequippedName,
-            string equippedName,
-            ItemType type,
-            float powerBoost,
-            int typeUse = 1
-        )
-        {
-            DigbotItem unequippedItem = new() { Type = type, ItemKey = unequippedName };
-            DigbotItem equippedItem = new()
-            {
-                Type = type,
-                TypeUse = typeUse,
-                ItemKey = equippedName,
-            };
-
-            unequippedItem.Use += (player, action, position) =>
-            {
-                if (action == ActionType.Equip)
-                {
-                    if (player.ItemLimits[equippedItem.Type] < equippedItem.TypeUse)
-                    {
-                        return (new Stats(), ["ERROR: Can't equip"]);
-                    }
-                    player.SetItems(equippedItem, 1);
-                    player.SetItems(unequippedItem, -1);
-                }
-                return null;
-            };
-
-            equippedItem.Use += (player, action, position) =>
-            {
-                if (action == ActionType.Equip)
-                {
-                    player.SetItems(unequippedItem, 1);
-                    player.SetItems(equippedItem, -1);
-                }
-                else if (action == ActionType.Drill)
-                {
-                    if (player.Gold >= typeUse * 2)
-                    {
-                        player.Gold -= typeUse * 2;
-                        return (new Stats() { AbsoluteStrength = powerBoost }, []);
-                    }
-                    else
-                    {
-                        return (new Stats(), ["ERROR: Not enough Gold"]);
-                    }
-                }
-                return null;
-            };
-
-            AddItem(unequippedItem);
-            AddItem(equippedItem);
+            Items.TryAdd(item.ItemKey, item);
         }
     }
 }

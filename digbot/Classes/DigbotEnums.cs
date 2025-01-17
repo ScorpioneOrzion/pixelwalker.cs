@@ -12,7 +12,7 @@ namespace digbot.Classes
 
     public enum ActionType
     {
-        Unknown, // for temporary effects
+        Unknown, // for temporary effects (or void type)
         Reveal, // for actions that reveal blocks
         Equip, // for actions that equip items
         Use, // for actions that use items
@@ -26,7 +26,7 @@ namespace digbot.Classes
 
     public enum ItemType
     {
-        Unknown, // for temporary effects
+        Unknown, // for temporary effects (or void type)
         Generic, // for items that have no specific type
         Consumable, // for items that can be used once
         Armor, // for items that can be equipped

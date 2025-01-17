@@ -213,7 +213,7 @@ namespace digbot.Classes
         public (DigbotItem, int)[] Craft = [];
         public bool BuyAble => Cost != 0f && Hidden == false;
         public bool CraftAble => Craft.Length > 0 && Hidden == false;
-        public Func<Entity, ActionType, (int x, int y)?, (Stats, List<string>)?> Use = (
+        public Func<Entity, ActionType, (int x, int y)?, (Stats, float, List<string>)?> Use = (
             entity,
             action,
             position
@@ -286,9 +286,10 @@ namespace digbot.Classes
         public ItemLimits ItemLimits { get; private set; } = new();
         public Dictionary<DigbotItem, int> Inventory = [];
 
-        public (Stats, List<string>) Use(ActionType action, (int x, int y)? position)
+        public (Stats, float, List<string>) Use(ActionType action, (int x, int y)? position)
         {
             Stats totalStats = new();
+            float totalGoldCost = 0;
             List<string> messages = [];
 
             foreach (var (item, count) in Inventory)
@@ -296,14 +297,18 @@ namespace digbot.Classes
                 var result = item.Use(this, action, position); // Get the result from the item
 
                 // If the result is not null and contains Stats and messages
-                if (result != null && result.Value is (Stats stats, List<string> message))
+                if (
+                    result != null
+                    && result.Value is (Stats stats, float GoldCost, List<string> message)
+                )
                 {
+                    totalGoldCost += GoldCost;
                     totalStats += stats * count;
                     messages.AddRange(message);
                 }
             }
 
-            return (totalStats, messages);
+            return (totalStats, totalGoldCost, messages);
         }
 
         public void SetItems(DigbotItem item, int amount = 0)

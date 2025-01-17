@@ -302,8 +302,9 @@ void AddPlayer(string Username, DigbotPlayerRole role)
                     blockList.AddRange(
                         worldTemplate
                             .ActBlock(
+                                client,
                                 ActionType.Mine,
-                                playerObj,
+                                (playerObj, playerId.Value),
                                 position.x,
                                 position.y - worldTemplate.AirHeight,
                                 PixelBlock.Empty
@@ -311,8 +312,8 @@ void AddPlayer(string Username, DigbotPlayerRole role)
                             .Select(blockChange =>
                             {
                                 return new PlacedBlock(
-                                    blockChange.x,
-                                    blockChange.y,
+                                    blockChange.position.x,
+                                    blockChange.position.y,
                                     WorldLayer.Foreground,
                                     new BasicBlock(blockChange.block)
                                 );
