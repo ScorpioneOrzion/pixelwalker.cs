@@ -215,14 +215,38 @@
 	],
 	"resource": {
 		"ore": [
-			"coal",
-			"saphirite",
-			"stiratite",
-			"crotinnium",
-			"jivolite",
-			"karnite",
-			"xenotite",
-			"zorium"
+			{
+				"name": "coal",
+				"properties": {}
+			},
+			{
+				"name": "saphirite",
+				"properties": {}
+			},
+			{
+				"name": "stiratite",
+				"properties": {}
+			},
+			{
+				"name": "crotinnium",
+				"properties": {}
+			},
+			{
+				"name": "jivolite",
+				"properties": {}
+			},
+			{
+				"name": "karnite",
+				"properties": {}
+			},
+			{
+				"name": "xenotite",
+				"properties": {}
+			},
+			{
+				"name": "zorium",
+				"properties": {}
+			}
 		],
 		"type": [
 			{

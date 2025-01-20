@@ -536,29 +536,29 @@ namespace digbot.Classes
 
             foreach (var ore in itemData.Resource.Ore)
             {
-                foreach (var shape in itemData.Resource.Type)
+                foreach (var type in itemData.Resource.Type)
                 {
-                    if (shape.Ignore.Contains(ore.Name))
+                    if (type.Ignore.Contains(ore.Name))
                         continue;
 
                     List<(string Placeholder, string Replacement)> replacement =
                     [
                         ("$ore", ore.Name),
-                        ("$type", shape.Type),
+                        ("$type", type.Type),
                     ];
 
                     AddItem(
                         new()
                         {
-                            ItemKey = Replace(shape.ItemFormat, replacement),
-                            Description = Replace(shape.DesFormat, replacement),
-                            Name = Replace(shape.Nameformat, replacement),
-                            Cost = shape.Cost,
+                            ItemKey = Replace(type.ItemFormat, replacement),
+                            Description = Replace(type.DesFormat, replacement),
+                            Name = Replace(type.Nameformat, replacement),
+                            Cost = type.Cost,
                             Craft =
-                                shape.CraftingIngredients.Count != 0
+                                type.CraftingIngredients.Count != 0
                                     ?
                                     [
-                                        .. shape.CraftingIngredients.Select(ingredient =>
+                                        .. type.CraftingIngredients.Select(ingredient =>
                                             (
                                                 Items[$"{Replace(ingredient.Type, replacement)}"],
                                                 ingredient.Amount
