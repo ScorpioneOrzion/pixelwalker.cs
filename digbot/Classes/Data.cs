@@ -53,34 +53,33 @@ namespace digbot.Classes
         public static Dictionary<string, DigbotPlayer> LoadFileJson(string filePath)
         {
             var json = File.ReadAllText(filePath);
-            var saveData = JsonSerializer.Deserialize<SaveData>(json);
+            var saveData = JsonSerializer.Deserialize<SaveData>(json)!;
 
             var players = new Dictionary<string, DigbotPlayer>();
 
-            if (saveData != null)
-                foreach (var kvp in saveData.Players)
+            foreach (var kvp in saveData.Players)
+            {
+                var inventory = kvp.Value.Inventory.ToDictionary(
+                    itemKvp => Items[saveData.UsedItemKeys[itemKvp.Key]], // Map index to item key
+                    itemKvp => itemKvp.Value
+                );
+
+                DigbotPlayer player;
+
+                if (SetRoles.TryGetValue(kvp.Key, out var role))
                 {
-                    var inventory = kvp.Value.Inventory.ToDictionary(
-                        itemKvp => Items[saveData.UsedItemKeys[itemKvp.Key]], // Map index to item key
-                        itemKvp => itemKvp.Value
-                    );
-
-                    DigbotPlayer player;
-
-                    if (SetRoles.TryGetValue(kvp.Key, out var role))
-                    {
-                        player = new DigbotPlayer(inventory, kvp.Value.Gold) { Role = role };
-                    }
-                    else
-                    {
-                        player = new DigbotPlayer(inventory, kvp.Value.Gold)
-                        {
-                            Role = DigbotPlayerRole.None,
-                        };
-                    }
-
-                    players[kvp.Key] = player;
+                    player = new DigbotPlayer(inventory, kvp.Value.Gold) { Role = role };
                 }
+                else
+                {
+                    player = new DigbotPlayer(inventory, kvp.Value.Gold)
+                    {
+                        Role = DigbotPlayerRole.None,
+                    };
+                }
+
+                players[kvp.Key] = player;
+            }
 
             return players;
         }
@@ -511,164 +510,66 @@ namespace digbot.Classes
 
         public static void Initialize()
         {
-            AddItem(
-                new HiddenDigbotItem()
-                {
-                    ItemKey = "AbsoluteStrength",
-                    Use = (entity, action, position) =>
-                    {
-                        return action switch
-                        {
-                            ActionType.Mine or ActionType.Drill => (
-                                new() { AbsoluteStrength = 0.01f },
-                                0,
-                                []
-                            ),
-                            _ => null,
-                        };
-                    },
-                }
-            );
-            AddItem(
-                new HiddenDigbotItem()
-                {
-                    ItemKey = "RelativeStrength",
-                    Use = (entity, action, position) =>
-                    {
-                        return action switch
-                        {
-                            ActionType.Mine or ActionType.Drill => (
-                                new() { RelativeStrength = 0.01f },
-                                0,
-                                []
-                            ),
-                            _ => null,
-                        };
-                    },
-                }
-            );
-            AddItem(
-                new HiddenDigbotItem()
-                {
-                    ItemKey = "AbsoluteLuck",
-                    Use = (entity, action, position) =>
-                    {
-                        return action switch
-                        {
-                            ActionType.Mine or ActionType.Drill => (
-                                new() { AbsoluteLuck = 0.01f },
-                                0f,
-                                []
-                            ),
-                            _ => null,
-                        };
-                    },
-                }
-            );
-            AddItem(
-                new HiddenDigbotItem()
-                {
-                    ItemKey = "RelativeLuck",
-                    Use = (entity, action, position) =>
-                    {
-                        return action switch
-                        {
-                            ActionType.Mine or ActionType.Drill => (
-                                new() { RelativeLuck = 0.01f },
-                                0f,
-                                []
-                            ),
-                            _ => null,
-                        };
-                    },
-                }
-            );
-            AddItem(
-                new HiddenDigbotItem()
-                {
-                    ItemKey = "AbsolutePerception",
-                    Use = (entity, action, position) =>
-                    {
-                        return action switch
-                        {
-                            ActionType.Mine or ActionType.Drill => (
-                                new() { AbsolutePerception = 0.01f },
-                                0f,
-                                []
-                            ),
-                            _ => null,
-                        };
-                    },
-                }
-            );
-            AddItem(
-                new HiddenDigbotItem()
-                {
-                    ItemKey = "RelativePerception",
-                    Use = (entity, action, position) =>
-                    {
-                        return action switch
-                        {
-                            ActionType.Mine or ActionType.Drill => (
-                                new() { RelativePerception = 0.01f },
-                                0f,
-                                []
-                            ),
-                            _ => null,
-                        };
-                    },
-                }
-            );
+            var itemData = ItemRegistry.LoadGameData("itemData.json");
 
-            Dictionary<string, object> ores = new()
+            foreach (string key in Stats._valid)
             {
-                ["saphirite"] = new() { },
-                ["stiratite"] = new() { },
-                ["crotinnium"] = new() { },
-                ["jivolite"] = new() { },
-                ["karnite"] = new() { },
-                ["xenotite"] = new() { },
-                ["zorium"] = new() { },
-            };
-
-            AddItem(
-                new()
-                {
-                    ItemKey = "Coal",
-                    Name = "Coal",
-                    Description = "A chunk of coal",
-                    Cost = 1f,
-                }
-            );
-
-            string[] oreNames = [.. ores.Keys];
-            for (int i = 0; i < oreNames.Length; i++)
-            {
-                // Ore
                 AddItem(
-                    new()
+                    new HiddenDigbotItem()
                     {
-                        ItemKey = $"{oreNames[i]}Ore",
-                        Name = $"{Capitalize(oreNames[i])} Ore",
-                        Description = $"A chunk of {oreNames[i]} ore",
-                        Cost = 5f,
-                    }
-                );
-
-                // Ingot
-                AddItem(
-                    new()
-                    {
-                        ItemKey = $"{oreNames[i]}Ingot",
-                        Name = $"{Capitalize(oreNames[i])} Ingot",
-                        Description = $"A bar of {oreNames[i]} ingot",
-                        Cost = 10f,
-                        Craft = [(Items[$"{oreNames[i]}Ore"], 1), (Items["Coal"], 1)],
+                        ItemKey = key,
+                        Use = (entity, action, position) =>
+                        {
+                            return action switch
+                            {
+                                ActionType.Mine or ActionType.Drill => (
+                                    new() { [key] = 0.01f },
+                                    0,
+                                    []
+                                ),
+                                _ => null,
+                            };
+                        },
                     }
                 );
             }
 
-            var itemData = ItemRegistry.LoadGameData("itemData.json");
+            foreach (var ore in itemData.Resource.Types)
+            {
+                foreach (var shape in itemData.Resource.Shapes)
+                {
+                    if (shape.Ignore.Contains(ore.Name))
+                        continue;
+
+                    List<(string Placeholder, string Replacement)> replacement =
+                    [
+                        ("$ore", ore.Name),
+                        ("$type", shape.Type),
+                    ];
+
+                    AddItem(
+                        new()
+                        {
+                            ItemKey = Replace(shape.ItemFormat, replacement),
+                            Description = Replace(shape.DesFormat, replacement),
+                            Name = Replace(shape.Nameformat, replacement),
+                            Cost = shape.Cost,
+                            Craft =
+                                shape.CraftingIngredients.Count != 0
+                                    ?
+                                    [
+                                        .. shape.CraftingIngredients.Select(ingredient =>
+                                            (
+                                                Items[$"{Replace(ingredient.Type, replacement)}"],
+                                                ingredient.Amount
+                                            )
+                                        ),
+                                    ]
+                                    : [],
+                        }
+                    );
+                }
+            }
 
             foreach (var tool in itemData.Tools)
             {
@@ -721,108 +622,26 @@ namespace digbot.Classes
                     }
                     return (new() { AbsoluteStrength = tool.Strength }, tool.UseCost, [""]);
                 };
-            }
-        }
 
-        private static void CreateToolSet(
-            string toolNamePrefix,
-            float[] toolStrengths,
-            int[] toolUses,
-            Func<
-                Entity,
-                ActionType,
-                (int x, int y)?,
-                float,
-                int,
-                (Stats, float, List<string>)?
-            > useHandler
-        )
-        {
-            DigbotItem[] lastMade = [];
-            for (int i = 0; i < toolStrengths.Length; i++)
-            {
-                var craftingRecipe = GetCraftingRecipe(lastMade);
-
-                DigbotItem unequippedItem = new()
-                {
-                    Type = ItemType.Tool,
-                    ItemKey = $"{toolNamePrefix}{i}Unequiped",
-                    Craft = craftingRecipe,
-                    Cost = craftingRecipe.Length == 0 ? 100f : 0,
-                };
-
-                DigbotItem equippedItem = new()
-                {
-                    Type = ItemType.Tool,
-                    TypeUse = toolUses[i],
-                    ItemKey = $"{toolNamePrefix}{i}Equiped",
-                };
-
-                lastMade = [.. lastMade, unequippedItem];
-
-                // Set event handlers
-                SetUnequippedItemHandler(unequippedItem, equippedItem);
-                SetEquippedItemHandler(
-                    equippedItem,
-                    unequippedItem,
-                    toolStrengths[i],
-                    toolUses[i],
-                    useHandler
-                );
-
-                // Add items to the system
                 AddItem(unequippedItem);
                 AddItem(equippedItem);
             }
         }
 
-        private static (DigbotItem, int)[] GetCraftingRecipe(DigbotItem[] lastMade) =>
-            lastMade.Length switch
-            {
-                > 1 => [(lastMade[^1], 1), (lastMade[^2], 1)],
-                1 => [(lastMade[0], 2)],
-                _ => [],
-            };
+        private static string Capitalize(string str) => $"{str[..1].ToUpper()}{str[1..]}";
 
-        private static void SetUnequippedItemHandler(DigbotItem unequipped, DigbotItem equipped)
-        {
-            unequipped.Use += (player, action, position) =>
-            {
-                if (action == ActionType.Equip)
-                {
-                    if (player.ItemLimits[equipped.Type] < equipped.TypeUse)
-                    {
-                        return (new Stats(), 0f, ["ERROR: Can't equip"]);
-                    }
-                    player.SetItems(equipped, 1);
-                    player.SetItems(unequipped, -1);
-                }
-                return null;
-            };
-        }
-
-        // Helper Method: Equipped item handler
-        private static void SetEquippedItemHandler(
-            DigbotItem equipped,
-            DigbotItem unequipped,
-            float strength,
-            int uses,
-            Func<Entity, ActionType, (int x, int y)?, float, int, (Stats, float, List<string>)?> use
+        private static string Replace(
+            string str,
+            List<(string Placeholder, string Replacement)> replacements
         )
         {
-            equipped.Use += (player, action, position) =>
+            foreach (var (placeholder, replacement) in replacements)
             {
-                if (action == ActionType.Equip)
-                {
-                    player.SetItems(unequipped, 1);
-                    player.SetItems(equipped, -1);
-                    return null;
-                }
-                return use(player, action, position, strength, uses);
-            };
+                str = str.Replace($"C{placeholder}", Capitalize(replacement)) // Capitalized replacement
+                    .Replace(placeholder, replacement); // Regular replacement
+            }
+            return str;
         }
-
-        private static string Capitalize(string str) => $"{str[..1].ToUpper()}{str[1..]}";
 
         private static void AddItem(DigbotItem item)
         {

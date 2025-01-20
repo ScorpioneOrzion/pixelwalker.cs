@@ -135,12 +135,69 @@ namespace digbot.Classes
 
     public class Stats
     {
-        public float AbsoluteStrength = default;
-        public float RelativeStrength = default;
-        public float AbsoluteLuck = default;
-        public float RelativeLuck = default;
-        public float AbsolutePerception = default;
-        public float RelativePerception = default;
+        private readonly Dictionary<string, float> _stats = [];
+        public static readonly HashSet<string> _valid =
+        [
+            nameof(AbsoluteStrength),
+            nameof(RelativeStrength),
+            nameof(AbsoluteLuck),
+            nameof(RelativeLuck),
+            nameof(AbsolutePerception),
+            nameof(RelativePerception),
+        ];
+
+        public float AbsoluteStrength
+        {
+            get => _stats.GetValueOrDefault(nameof(AbsoluteStrength), default);
+            set => _stats[nameof(AbsoluteStrength)] = value;
+        }
+
+        public float RelativeStrength
+        {
+            get => _stats.GetValueOrDefault(nameof(RelativeStrength), default);
+            set => _stats[nameof(RelativeStrength)] = value;
+        }
+
+        public float AbsoluteLuck
+        {
+            get => _stats.GetValueOrDefault(nameof(AbsoluteLuck), default);
+            set => _stats[nameof(AbsoluteLuck)] = value;
+        }
+
+        public float RelativeLuck
+        {
+            get => _stats.GetValueOrDefault(nameof(RelativeLuck), default);
+            set => _stats[nameof(RelativeLuck)] = value;
+        }
+
+        public float AbsolutePerception
+        {
+            get => _stats.GetValueOrDefault(nameof(AbsolutePerception), default);
+            set => _stats[nameof(AbsolutePerception)] = value;
+        }
+
+        public float RelativePerception
+        {
+            get => _stats.GetValueOrDefault(nameof(RelativePerception), default);
+            set => _stats[nameof(RelativePerception)] = value;
+        }
+
+        // Indexer to allow dictionary-style access
+        public float this[string property]
+        {
+            get
+            {
+                if (!_valid.Contains(property))
+                    throw new ArgumentException($"Invalid property name: {property}");
+                return _stats.GetValueOrDefault(property, default);
+            }
+            set
+            {
+                if (!_valid.Contains(property))
+                    throw new ArgumentException($"Invalid property name: {property}");
+                _stats[property] = value;
+            }
+        }
         public float Strength => AbsoluteStrength * (1 + RelativeStrength);
         public float Luck => AbsoluteLuck * (1 + RelativeLuck);
         public float Perception => AbsolutePerception * (1 + RelativePerception);

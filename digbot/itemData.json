@@ -213,5 +213,47 @@
 			]
 		}
 	],
-	"resource": []
+	"resource": {
+		"types": [
+			"coal",
+			"saphirite",
+			"stiratite",
+			"crotinnium",
+			"jivolite",
+			"karnite",
+			"xenotite",
+			"zorium"
+		],
+		"shapes": [
+			{
+				"type": "ore",
+				"itemFormat": "$ore$type",
+				"nameformat": "C$ore $type",
+				"desformat": "A pice of C$ore $type",
+				"ignore": [],
+				"crafting_ingredients": [],
+				"cost": 5
+			},
+			{
+				"type": "ingot",
+				"itemFormat": "$ore$type",
+				"nameformat": "C$ore $type",
+				"desformat": "An bar of C$ore $type",
+				"crafting_ingredients": [
+					{
+						"type": "$typeore",
+						"amount": 1
+					},
+					{
+						"type": "coalore",
+						"amount": 1
+					}
+				],
+				"ignore": [
+					"coal"
+				],
+				"cost": 10
+			}
+		]
+	}
 }
