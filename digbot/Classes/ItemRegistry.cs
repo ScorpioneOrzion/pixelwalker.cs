@@ -52,8 +52,8 @@ namespace digbot.Classes
 
     public class Resource
     {
-        public List<ResourceType> Types { get; set; } = [];
-        public List<ResourceShape> Shapes { get; set; } = [];
+        public List<ResourceType> Ore { get; set; } = [];
+        public List<ResourceShape> Type { get; set; } = [];
     }
 
     public class ItemRegistry

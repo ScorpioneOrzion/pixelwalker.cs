@@ -534,9 +534,9 @@ namespace digbot.Classes
                 );
             }
 
-            foreach (var ore in itemData.Resource.Types)
+            foreach (var ore in itemData.Resource.Ore)
             {
-                foreach (var shape in itemData.Resource.Shapes)
+                foreach (var shape in itemData.Resource.Type)
                 {
                     if (shape.Ignore.Contains(ore.Name))
                         continue;

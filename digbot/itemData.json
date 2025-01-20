@@ -214,7 +214,7 @@
 		}
 	],
 	"resource": {
-		"types": [
+		"ore": [
 			"coal",
 			"saphirite",
 			"stiratite",
@@ -224,7 +224,7 @@
 			"xenotite",
 			"zorium"
 		],
-		"shapes": [
+		"type": [
 			{
 				"type": "ore",
 				"itemFormat": "$ore$type",
