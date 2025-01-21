@@ -554,18 +554,6 @@ namespace digbot.Classes
                             Description = Replace(type.DesFormat, replacement),
                             Name = Replace(type.Nameformat, replacement),
                             Cost = type.Cost,
-                            Craft =
-                                type.CraftingIngredients.Count != 0
-                                    ?
-                                    [
-                                        .. type.CraftingIngredients.Select(ingredient =>
-                                            (
-                                                Items[$"{Replace(ingredient.Type, replacement)}"],
-                                                ingredient.Amount
-                                            )
-                                        ),
-                                    ]
-                                    : [],
                         }
                     );
                 }
@@ -625,6 +613,47 @@ namespace digbot.Classes
 
                 AddItem(unequippedItem);
                 AddItem(equippedItem);
+            }
+
+            foreach (var ore in itemData.Resource.Ore)
+            {
+                foreach (var type in itemData.Resource.Type)
+                {
+                    if (type.Ignore.Contains(ore.Name))
+                        continue;
+
+                    List<(string Placeholder, string Replacement)> replacement =
+                    [
+                        ("$ore", ore.Name),
+                        ("$type", type.Type),
+                    ];
+
+                    DigbotItem item = Items[$"{Replace(type.ItemFormat, replacement)}"];
+
+                    if (type.CraftingIngredients.Count == 0)
+                        continue;
+                    item.Craft =
+                    [
+                        .. type.CraftingIngredients.Select(ingredient =>
+                            (Items[$"{Replace(ingredient.Type, replacement)}"], ingredient.Amount)
+                        ),
+                    ];
+                }
+            }
+
+            foreach (var item in itemData.Tools)
+            {
+                DigbotItem unequippedItem = Items[$"{item.ItemKey}unequipped"];
+
+                if (item.CraftingRecipe.Count == 0)
+                    continue;
+
+                unequippedItem.Craft =
+                [
+                    .. item.CraftingRecipe.Select(ingredient =>
+                        (Items[$"{ingredient.ItemKey}unequipped"], ingredient.Quantity)
+                    ),
+                ];
             }
         }
 

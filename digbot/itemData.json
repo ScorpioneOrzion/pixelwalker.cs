@@ -270,13 +270,34 @@
 					},
 					{
 						"type": "coalore",
-						"amount": 1
+						"amount": 2
 					}
 				],
 				"ignore": [
 					"coal"
 				],
-				"cost": 10
+				"cost": 17.75
+			},
+			{
+				"type": "amulet",
+				"itemFormat": "$ore$type",
+				"nameformat": "C$ore $type",
+				"desformat": "An amulet made of C$ore $type",
+				"crafting_ingredients": [
+					{
+						"type": "$typeingot",
+						"amount": 1
+					},
+					{
+						"type": "saphiriteingot",
+						"amount": 1
+					}
+				],
+				"ignore": [
+					"coal",
+					"saphirite"
+				],
+				"cost": 43.375
 			}
 		]
 	}

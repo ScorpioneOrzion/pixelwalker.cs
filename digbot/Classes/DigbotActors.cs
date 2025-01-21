@@ -322,7 +322,7 @@ namespace digbot.Classes
             if (player.Inventory[this] < amount)
                 amount = player.Inventory[this];
             player.SetItems(ItemKey, -amount);
-            player.Gold += Cost * amount * 0.9f;
+            player.Gold += Cost * amount * 0.8f;
         }
     }
 
